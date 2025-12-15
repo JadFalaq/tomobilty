@@ -1,0 +1,12 @@
+CREATE TABLE IF NOT EXISTS agences (
+  id SERIAL PRIMARY KEY,
+  nom VARCHAR(100) NOT NULL,
+  ville VARCHAR(100) NOT NULL,
+  adresse VARCHAR(255),
+  telephone VARCHAR(20)
+);
+
+CREATE TABLE IF NOT EXISTS config (
+  key VARCHAR(100) PRIMARY KEY,
+  value TEXT
+);
