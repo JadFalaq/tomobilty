@@ -1,16 +1,20 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import AnimatedIntro from '@/components/AnimatedIntro';
 import { Car, Shield, Clock, MapPin, Search, Star, ArrowRight, CheckCircle, Mail, ChevronRight, Quote } from 'lucide-react';
+import { voituresAPI } from '@/lib/api';
 
 export default function Home() {
   // Vérifier immédiatement si l'intro a été vue (côté client uniquement)
   const [showIntro, setShowIntro] = useState(true);
   const [email, setEmail] = useState('');
+  const [featuredCars, setFeaturedCars] = useState<any[]>([]);
+  const [stats, setStats] = useState({ clients: 0, vehicules: 0, villes: 0 });
+  const statsRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     // Vérifier si l'intro a déjà été vue dans cette session
@@ -20,6 +24,47 @@ export default function Home() {
       setShowIntro(false);
     }
   }, []);
+
+  useEffect(() => {
+    const loadFeatured = async () => {
+      try {
+        const res = await voituresAPI.obtenirVoitures();
+        const rows = Array.isArray(res.data) ? res.data : [];
+        const mapped = rows.slice(0, 6).map((v: any) => ({
+          name: `${v.marque} ${v.modele}`,
+          category: v.statut || 'Disponible',
+          image: (Array.isArray(v.images) && v.images[0]) || 'https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?auto=format&fit=crop&w=1920&q=80',
+          price: `${v.prix_par_jour || 0} DH`,
+          features: [v.transmission || 'Automatique', v.type_carburant || 'Essence', `${v.nombre_places || 5} Places`]
+        }));
+        setFeaturedCars(mapped);
+        setStats({ clients: 500, vehicules: rows.length || 50, villes: 15 });
+      } catch (e) {
+        setFeaturedCars(FEATURED_CARS);
+        setStats({ clients: 500, vehicules: FEATURED_CARS.length, villes: 15 });
+      }
+    };
+    loadFeatured();
+  }, []);
+
+  useEffect(() => {
+    const el = statsRef.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(entries => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          let i = 0;
+          const t = setInterval(() => {
+            i += 10;
+            setStats(s => ({ clients: Math.min(500, i), vehicules: s.vehicules, villes: s.villes }));
+            if (i >= 500) clearInterval(t);
+          }, 20);
+        }
+      });
+    }, { threshold: 0.3 });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [statsRef]);
 
   const handleIntroComplete = () => {
     try {
@@ -89,15 +134,11 @@ export default function Home() {
     <div className="min-h-screen flex flex-col font-sans text-primary-900 bg-white">
       <Navbar />
       
-      {/* Hero Section */}
       <section className="relative h-screen min-h-[600px] flex items-center justify-center overflow-hidden bg-primary-950">
-        {/* Background Image with Overlay */}
         <div className="absolute inset-0 z-0">
-          <img 
-            src="https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?auto=format&fit=crop&w=1920&q=80" 
-            alt="Luxury Car Background" 
-            className="w-full h-full object-cover opacity-40"
-          />
+          <video className="w-full h-full object-cover opacity-40" autoPlay muted loop playsInline poster="/videos/intro.mp4">
+            <source src="/videos/intro.mp4" type="video/mp4" />
+          </video>
           <div className="absolute inset-0 bg-gradient-to-b from-primary-950/80 via-primary-900/60 to-primary-950"></div>
           <div className="absolute inset-0 bg-grain-pattern opacity-20"></div>
         </div>
@@ -140,7 +181,6 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Featured Cars Section */}
       <section className="py-24 bg-cream-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
@@ -150,9 +190,8 @@ export default function Home() {
               Sélectionnés pour leur prestige, leur confort et leur performance.
             </p>
           </div>
-
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {FEATURED_CARS.map((car, index) => (
+            {(featuredCars.length ? featuredCars : FEATURED_CARS).map((car, index) => (
               <div key={index} className="group bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-500 border border-primary-100">
                 <div className="relative h-64 overflow-hidden">
                   <img 
@@ -234,7 +273,25 @@ export default function Home() {
         </div>
       </section>
 
-      {/* How It Works Section */}
+      <section ref={statsRef} className="py-24 bg-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-center">
+            <div className="p-8 rounded-2xl bg-primary-50">
+              <div className="text-5xl font-bold text-primary-900">{stats.clients}+</div>
+              <div className="mt-2 text-primary-600">Clients satisfaits</div>
+            </div>
+            <div className="p-8 rounded-2xl bg-primary-50">
+              <div className="text-5xl font-bold text-primary-900">{stats.vehicules}+</div>
+              <div className="mt-2 text-primary-600">Véhicules disponibles</div>
+            </div>
+            <div className="p-8 rounded-2xl bg-primary-50">
+              <div className="text-5xl font-bold text-primary-900">{stats.villes}+</div>
+              <div className="mt-2 text-primary-600">Villes desservies</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section className="py-24 bg-primary-900 text-white relative overflow-hidden">
         <div className="absolute inset-0 bg-grain-pattern opacity-10"></div>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
