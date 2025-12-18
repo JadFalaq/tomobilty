@@ -1,0 +1,164 @@
+services:
+  # --------------------------------------------------------------------------------
+  # API GATEWAY (Point d'entrée principal)
+  # --------------------------------------------------------------------------------
+  - type: web
+    name: api-gateway
+    env: node
+    plan: free
+    region: frankfurt
+    rootDirectory: backend/services/api-gateway
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: AUTH_URL
+        fromService:
+          type: web
+          name: auth-service
+          property: url
+      - key: RENTAL_URL
+        fromService:
+          type: web
+          name: rental-service
+          property: url
+      - key: PAYMENT_URL
+        fromService:
+          type: web
+          name: payment-service
+          property: url
+      - key: INVOICE_URL
+        fromService:
+          type: web
+          name: invoice-service
+          property: url
+      - key: CHAT_URL
+        fromService:
+          type: web
+          name: chatbot-service
+          property: url
+      - key: OCR_URL
+        fromService:
+          type: web
+          name: ocr-service
+          property: url
+      - key: ADMIN_URL
+        fromService:
+          type: web
+          name: admin-service
+          property: url
+
+  # --------------------------------------------------------------------------------
+  # AUTH SERVICE
+  # --------------------------------------------------------------------------------
+  - type: web
+    name: auth-service
+    env: node
+    plan: free
+    region: frankfurt
+    rootDirectory: backend/services/auth-service
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+
+  # --------------------------------------------------------------------------------
+  # RENTAL SERVICE
+  # --------------------------------------------------------------------------------
+  - type: web
+    name: rental-service
+    env: node
+    plan: free
+    region: frankfurt
+    rootDirectory: backend/services/rental-service
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        fromService:
+          type: web
+          name: auth-service
+          envVarKey: JWT_SECRET
+
+  # --------------------------------------------------------------------------------
+  # PAYMENT SERVICE
+  # --------------------------------------------------------------------------------
+  - type: web
+    name: payment-service
+    env: node
+    plan: free
+    region: frankfurt
+    rootDirectory: backend/services/payment-service
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+
+  # --------------------------------------------------------------------------------
+  # INVOICE SERVICE
+  # --------------------------------------------------------------------------------
+  - type: web
+    name: invoice-service
+    env: node
+    plan: free
+    region: frankfurt
+    rootDirectory: backend/services/invoice-service
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+
+  # --------------------------------------------------------------------------------
+  # CHATBOT SERVICE
+  # --------------------------------------------------------------------------------
+  - type: web
+    name: chatbot-service
+    env: node
+    plan: free
+    region: frankfurt
+    rootDirectory: backend/services/chatbot-service
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+
+  # --------------------------------------------------------------------------------
+  # OCR SERVICE
+  # --------------------------------------------------------------------------------
+  - type: web
+    name: ocr-service
+    env: node
+    plan: free
+    region: frankfurt
+    rootDirectory: backend/services/ocr-service
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+
+  # --------------------------------------------------------------------------------
+  # ADMIN SERVICE
+  # --------------------------------------------------------------------------------
+  - type: web
+    name: admin-service
+    env: node
+    plan: free
+    region: frankfurt
+    rootDirectory: backend/services/admin-service
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: DATABASE_URL
+        sync: false
