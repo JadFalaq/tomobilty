@@ -1,7 +1,0 @@
-CREATE TABLE IF NOT EXISTS scans (
-  id SERIAL PRIMARY KEY,
-  filename VARCHAR(255),
-  content TEXT,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-

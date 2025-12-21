@@ -4,153 +4,105 @@ Tomobilty est une plateforme web complète de location de voitures au Maroc, dé
 
 ## 🚀 Fonctionnalités
 
-### Pour les Clients
-- **Catalogue de voitures** : Parcourir et filtrer les voitures disponibles
-- **Réservation en ligne** : Système de réservation avec vérification de disponibilité en temps réel
-- **Système de verrouillage** : Prévention des doubles réservations grâce à un système de verrous temporaires
-- **Gestion des réservations** : Voir, confirmer et annuler ses réservations
-- **Authentification sécurisée** : Inscription et connexion avec JWT
-- **Profil utilisateur** : Gestion des informations personnelles
-
-### Pour les Administrateurs
-- **Gestion des voitures** : Ajouter, modifier et supprimer des véhicules
-- **Gestion des réservations** : Voir toutes les réservations et mettre à jour leur statut
-- **Tableau de bord** : Vue d'ensemble de l'activité
-
-### Fonctionnalités Techniques
-- **Synchronisation des réservations** : Système de verrouillage pour éviter les conflits
-- **Validation des dates** : Vérification automatique de la disponibilité
-- **Calcul automatique des prix** : Prix total calculé selon la durée et les options
-- **Interface responsive** : Design adaptatif pour mobile, tablette et desktop
-- **API RESTful** : Backend structuré avec Express.js
-
-## 🛠️ Technologies Utilisées
 
 ### Frontend
-- **Next.js 14** : Framework React pour le rendu côté serveur
-- **TypeScript** : Typage statique pour plus de sécurité
-- **Tailwind CSS** : Framework CSS utilitaire pour le design
-- **Lucide React** : Bibliothèque d'icônes moderne
-- **Axios** : Client HTTP pour les appels API
+- **Next.js 14** : Framework React avec App Router
+- **TypeScript** : Typage statique pour une meilleure robustesse
+- **Tailwind CSS** : Framework CSS utilitaire
+- **Lucide React** : Icônes modernes et cohérentes
 
-### Backend
-- **Node.js** : Environnement d'exécution JavaScript
+### Backend (Architecture Monolithique)
+- **Node.js** : Runtime JavaScript côté serveur
 - **Express.js** : Framework web minimaliste
-- **MongoDB** : Base de données NoSQL
-- **Mongoose** : ODM pour MongoDB
+- **Prisma** : ORM moderne avec 26 modèles de données
+- **PostgreSQL** : Base de données relationnelle (Supabase)
 - **JWT** : Authentification par tokens
+- **Stripe** : Traitement des paiements
+- **jsPDF** : Génération de contrats PDF
+- **Nodemailer** : Envoi d'emails
 - **bcryptjs** : Hachage des mots de passe
 
-## 📦 Installation
+### Infrastructure
+- **Vercel** : Déploiement serverless
+- **Supabase** : Base de données PostgreSQL managée
+
+## Installation et Configuration
 
 ### Prérequis
-- Node.js (v18 ou supérieur)
-- MongoDB (local ou Atlas)
+- Node.js 18+ 
 - npm ou yarn
+- Compte Supabase (PostgreSQL)
+- Compte Stripe (paiements)
 
-### 1. Cloner le projet
+### Installation
+
+1. **Cloner le repository**
 ```bash
+git clone [URL_DU_REPO]
 cd tomobilty
 ```
 
-### 2. Installer les dépendances
+2. **Installer les dépendances**
 ```bash
 npm install
 ```
 
-### 3. Configuration de l'environnement
-Créez un fichier `.env` à la racine du projet :
+3. **Configuration de l'environnement**
+```bash
+cp .env.example .env
+```
 
+Remplir les variables d'environnement dans `.env` :
 ```env
-# Base de données MongoDB
-MONGODB_URI=mongodb://localhost:27017/tomobilty
+# Base de données PostgreSQL (Supabase)
+DATABASE_URL="postgresql://postgres:password@db.project.supabase.co:5432/postgres"
 
-# JWT Secret pour l'authentification
-JWT_SECRET=votre_secret_jwt_tres_securise_ici_changez_moi
+# JWT Secret
+JWT_SECRET="votre_secret_jwt_tres_securise_ici"
 
-# Configuration du serveur
+# Configuration serveur
 PORT=5000
 NODE_ENV=development
-
-# URL du frontend (pour CORS)
 FRONTEND_URL=http://localhost:3000
+
+# Supabase Configuration
+SUPABASE_URL=https://your_project.supabase.co
+SUPABASE_ANON_KEY=your_supabase_anon_key
+
+# Email Configuration (Nodemailer)
+EMAIL_HOST=smtp.gmail.com
+EMAIL_PORT=587
+EMAIL_USER=your_email@gmail.com
+EMAIL_PASS=your_app_password
+
+# Stripe Configuration
+STRIPE_SECRET_KEY=sk_test_your_stripe_secret_key
+STRIPE_PUBLISHABLE_KEY=pk_test_your_stripe_publishable_key
+STRIPE_WEBHOOK_SECRET=whsec_your_webhook_secret
+
+# Twilio Configuration (SMS)
+TWILIO_ACCOUNT_SID=your_twilio_account_sid
+TWILIO_AUTH_TOKEN=your_twilio_auth_token
+TWILIO_PHONE_NUMBER=your_twilio_phone_number
 ```
 
-### 4. Démarrer MongoDB
-Si vous utilisez MongoDB en local :
+4. **Configuration de la base de données**
 ```bash
-mongod
+# Générer le client Prisma
+npm run prisma:generate
+
+# Appliquer le schéma à la base de données
+npm run prisma:push
+
+# (Optionnel) Ouvrir Prisma Studio
+npm run prisma:studio
 ```
 
-### 5. Lancer l'application
-
-#### Option 1 : Démarrer frontend et backend ensemble
+5. **Initialiser le système**
 ```bash
-npm run dev:all
+# Initialiser les données par défaut (niveaux fidélité, statuts, etc.)
+curl -X POST http://localhost:5000/api/admin/system/initialize
 ```
-
-#### Option 2 : Démarrer séparément
-
-Terminal 1 - Backend :
-```bash
-npm run server
-```
-
-Terminal 2 - Frontend :
-```bash
-npm run dev
-```
-
-### 6. Accéder à l'application
-- **Frontend** : http://localhost:3000
-- **Backend API** : http://localhost:5000
-
-## 📁 Structure du Projet
-
-```
-tomobilty/
-├── app/                          # Pages Next.js
-│   ├── page.tsx                  # Page d'accueil
-│   ├── voitures/                 # Pages des voitures
-│   │   ├── page.tsx              # Liste des voitures
-│   │   └── [id]/page.tsx         # Détails et réservation
-│   ├── connexion/page.tsx        # Page de connexion
-│   ├── inscription/page.tsx      # Page d'inscription
-│   ├── mes-reservations/page.tsx # Réservations de l'utilisateur
-│   ├── layout.tsx                # Layout principal
-│   └── globals.css               # Styles globaux
-├── backend/                      # Backend Node.js/Express
-│   ├── config/                   # Configuration
-│   │   └── db.js                 # Connexion MongoDB
-│   ├── controllers/              # Contrôleurs
-│   │   ├── authController.js     # Authentification
-│   │   ├── voitureController.js  # Gestion des voitures
-│   │   └── reservationController.js # Gestion des réservations
-│   ├── middleware/               # Middlewares
-│   │   └── authMiddleware.js     # Protection des routes
-│   ├── models/                   # Modèles Mongoose
-│   │   ├── User.js               # Modèle utilisateur
-│   │   ├── Voiture.js            # Modèle voiture
-│   │   └── Reservation.js        # Modèle réservation
-│   ├── routes/                   # Routes API
-│   │   ├── authRoutes.js
-│   │   ├── voitureRoutes.js
-│   │   └── reservationRoutes.js
-│   └── server.js                 # Point d'entrée du serveur
-├── components/                   # Composants React
-│   ├── Navbar.tsx                # Barre de navigation
-│   ├── Footer.tsx                # Pied de page
-│   └── VoitureCard.tsx           # Carte de voiture
-├── lib/                          # Utilitaires
-│   ├── api.ts                    # Configuration Axios et API
-│   └── utils.ts                  # Fonctions utilitaires
-├── package.json                  # Dépendances
-├── tsconfig.json                 # Configuration TypeScript
-├── tailwind.config.ts            # Configuration Tailwind
-└── README.md                     # Documentation
-```
-
-## 🔐 API Endpoints
 
 ### Authentification
 - `POST /api/auth/inscription` - Créer un compte
