@@ -55,13 +55,14 @@ export default function VoitureDetailPage() {
         setUser(JSON.parse(localData));
         try {
            const res = await authAPI.obtenirProfil();
-           setUser(res.data);
-           localStorage.setItem('user', JSON.stringify(res.data));
+           const userData = res.data.data.user;
+           setUser(userData);
+           localStorage.setItem('user', JSON.stringify(userData));
            // Pre-fill user data
            setReservation(prev => ({
              ...prev,
-             nom: res.data.nom || '',
-             prenom: res.data.prenom || '',
+             nom: userData.nom || '',
+             prenom: userData.prenom || '',
              email: res.data.email || '',
              telephone: res.data.telephone || '',
              permisNumero: res.data.permisNumero || ''
@@ -82,11 +83,12 @@ export default function VoitureDetailPage() {
     try {
       setLoading(true);
       const response = await voituresAPI.obtenirVoitureParId(params.id as string);
-      setVoiture(response.data);
+      const carData = response.data.data.car;
+      setVoiture(carData);
       setReservation(prev => ({
         ...prev,
-        lieuPriseEnCharge: response.data.agence?.ville || '',
-        lieuRetour: response.data.agence?.ville || '',
+        lieuPriseEnCharge: carData.agence_ville || '',
+        lieuRetour: carData.agence_ville || '',
       }));
     } catch (error) {
       console.error('Erreur lors du chargement de la voiture:', error);

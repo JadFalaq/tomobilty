@@ -39,7 +39,7 @@ export default function ProfilPage() {
 
         // Charger les données fraîches depuis l'API
         const response = await authAPI.obtenirProfil();
-        const userData = response.data;
+        const userData = response.data.data.user;
         
         setUser(userData);
         // Mettre à jour le localStorage
@@ -101,7 +101,7 @@ export default function ProfilPage() {
       const response = await authAPI.mettreAJourProfil(formData);
       
       // Mettre à jour les données locales
-      localStorage.setItem('user', JSON.stringify(response.data));
+      localStorage.setItem('user', JSON.stringify(response.data.data.user));
       setUser(response.data);
       setEditing(false);
       alert('Profil mis à jour avec succès !');

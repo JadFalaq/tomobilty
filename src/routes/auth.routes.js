@@ -10,7 +10,9 @@ const router = express.Router();
 
 // Public routes
 router.post('/register', validateUserRegistration, authController.register);
+router.post('/inscription', validateUserRegistration, authController.register);
 router.post('/login', validateUserLogin, authController.login);
+router.post('/connexion', validateUserLogin, authController.login);
 router.post('/forgot-password', authController.forgotPassword);
 router.post('/reset-password', authController.resetPassword);
 router.post('/verify-email', authController.verifyEmail);

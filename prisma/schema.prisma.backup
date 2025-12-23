@@ -1,0 +1,637 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// =============================================
+// USER MANAGEMENT
+// =============================================
+
+model User {
+  id                         Int       @id @default(autoincrement())
+  nom                        String?   @db.VarChar(100)
+  prenom                     String?   @db.VarChar(100)
+  email                      String    @unique @db.VarChar(255)
+  telephone                  String?   @db.VarChar(20)
+  mot_de_passe              String?   @db.VarChar(255)
+  role                       Role      @default(CLIENT)
+  email_verified             Boolean   @default(false)
+  phone_verified             Boolean   @default(false)
+  email_verification_token   String?   @db.VarChar(255)
+  email_verification_expires DateTime?
+  adresse                    String?   @db.Text
+  permis_conduire           String?   @db.Text
+  date_creation             DateTime  @default(now())
+  date_modification         DateTime  @default(now()) @updatedAt
+
+  // Relations
+  oauthAccounts     OauthAccount[]
+  loyaltyAccount    LoyaltyAccount?
+  bookings          Booking[]
+  payments          Payment[]
+  invoices          Invoice[]
+  documents         Document[]
+  chatConversations ChatConversation[]
+  reviews           Review[]
+  notifications     Notification[]
+  additionalDrivers AdditionalDriver[]
+
+  @@map("users")
+}
+
+enum Role {
+  CLIENT
+  ADMIN
+  AGENT
+
+  @@map("role")
+}
+
+model OauthAccount {
+  id                  Int      @id @default(autoincrement())
+  user_id            Int
+  provider           String   @db.VarChar(50)
+  provider_account_id String   @db.VarChar(255)
+  created_at         DateTime @default(now())
+
+  // Relations
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([provider, provider_account_id])
+  @@map("oauth_accounts")
+}
+
+model PhoneVerification {
+  id         Int      @id @default(autoincrement())
+  phone      String   @db.VarChar(20)
+  code       String   @db.VarChar(10)
+  expires_at DateTime
+  attempts   Int      @default(0)
+  created_at DateTime @default(now())
+
+  @@map("phone_verifications")
+}
+
+// =============================================
+// LOYALTY SYSTEM
+// =============================================
+
+model LoyaltyAccount {
+  id              Int      @id @default(autoincrement())
+  user_id        Int      @unique
+  points_balance Int      @default(0)
+  tier_id        Int      @default(1)
+  total_spent    Decimal  @default(0) @db.Decimal(10, 2)
+  created_at     DateTime @default(now())
+  updated_at     DateTime @default(now()) @updatedAt
+
+  // Relations
+  user         User                @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  tier         LoyaltyTier         @relation(fields: [tier_id], references: [id])
+  transactions LoyaltyTransaction[]
+
+  @@map("loyalty_account")
+}
+
+model LoyaltyTier {
+  id                Int      @id @default(autoincrement())
+  name             String   @db.VarChar(50)
+  min_points       Int
+  discount_percent Decimal  @db.Decimal(5, 2)
+  benefits         String?  @db.Text
+  created_at       DateTime @default(now())
+
+  // Relations
+  loyaltyAccounts LoyaltyAccount[]
+
+  @@map("loyalty_tier")
+}
+
+model LoyaltyTransaction {
+  id                Int                     @id @default(autoincrement())
+  loyalty_account_id Int
+  points           Int
+  transaction_type LoyaltyTransactionType
+  description      String?                 @db.Text
+  booking_id       Int?
+  created_at       DateTime                @default(now())
+
+  // Relations
+  loyaltyAccount LoyaltyAccount @relation(fields: [loyalty_account_id], references: [id], onDelete: Cascade)
+  booking        Booking?       @relation(fields: [booking_id], references: [id])
+
+  @@map("loyalty_transaction")
+}
+
+enum LoyaltyTransactionType {
+  EARNED
+  REDEEMED
+  EXPIRED
+
+  @@map("loyalty_transaction_type")
+}
+
+model LoyaltyReward {
+  id           Int      @id @default(autoincrement())
+  name         String   @db.VarChar(100)
+  description  String?  @db.Text
+  points_cost  Int
+  reward_type  String   @db.VarChar(50)
+  reward_value Decimal? @db.Decimal(10, 2)
+  is_active    Boolean  @default(true)
+  created_at   DateTime @default(now())
+
+  @@map("loyalty_reward")
+}
+
+// =============================================
+// CAR MANAGEMENT
+// =============================================
+
+model Car {
+  id                Int       @id @default(autoincrement())
+  brand_id         Int
+  category_id      Int
+  modele           String    @db.VarChar(50)
+  annee            Int
+  immatriculation  String    @unique @db.VarChar(20)
+  couleur          String?   @db.VarChar(30)
+  type_carburant   String?   @db.VarChar(20)
+  transmission     String?   @db.VarChar(20)
+  nombre_places    Int?
+  nombre_portes    Int?
+  climatisation    Boolean   @default(true)
+  gps              Boolean   @default(false)
+  prix_par_jour    Decimal   @db.Decimal(10, 2)
+  caution          Decimal   @default(0) @db.Decimal(10, 2)
+  kilometrage      Int       @default(0)
+  statut           CarStatus @default(DISPONIBLE)
+  agence_nom       String?   @db.VarChar(100)
+  agence_ville     String?   @db.VarChar(100)
+  agence_adresse   String?   @db.VarChar(255)
+  agence_telephone String?   @db.VarChar(20)
+  caracteristiques String?   @db.Text
+  description      String?   @db.Text
+  ville            String    @db.VarChar(100)
+  disponible       Boolean   @default(true)
+  date_creation    DateTime  @default(now())
+  date_modification DateTime @default(now()) @updatedAt
+
+  // Relations
+  brand       CarBrand    @relation(fields: [brand_id], references: [id])
+  category    CarCategory @relation(fields: [category_id], references: [id])
+  images      CarImage[]
+  bookings    Booking[]
+  maintenance Maintenance[]
+
+  @@map("car")
+}
+
+enum CarStatus {
+  DISPONIBLE
+  LOUE
+  MAINTENANCE
+  INDISPONIBLE
+
+  @@map("car_status")
+}
+
+model CarBrand {
+  id         Int      @id @default(autoincrement())
+  name       String   @unique @db.VarChar(50)
+  logo_url   String?  @db.VarChar(500)
+  created_at DateTime @default(now())
+
+  // Relations
+  cars Car[]
+
+  @@map("car_brand")
+}
+
+model CarCategory {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique @db.VarChar(50)
+  description String?  @db.Text
+  created_at  DateTime @default(now())
+
+  // Relations
+  cars Car[]
+  promotionCategories PromotionCategory[]
+
+  @@map("car_category")
+}
+
+model CarImage {
+  id         Int      @id @default(autoincrement())
+  car_id     Int
+  image_url  String   @db.VarChar(500)
+  alt_text   String?  @db.VarChar(255)
+  is_primary Boolean  @default(false)
+  created_at DateTime @default(now())
+
+  // Relations
+  car Car @relation(fields: [car_id], references: [id], onDelete: Cascade)
+
+  @@map("car_image")
+}
+
+// =============================================
+// BOOKING SYSTEM
+// =============================================
+
+model Booking {
+  id                     Int           @id @default(autoincrement())
+  user_id               Int
+  car_id                Int
+  date_debut            DateTime      @db.Date
+  date_fin              DateTime      @db.Date
+  lieu_prise_en_charge  String?       @db.VarChar(255)
+  lieu_retour           String?       @db.VarChar(255)
+  prix_total            Decimal       @db.Decimal(10, 2)
+  caution_payee         Decimal       @default(0) @db.Decimal(10, 2)
+  status_id             Int           @default(1)
+  mode_paiement         String?       @db.VarChar(30)
+  paiement_effectue     Boolean       @default(false)
+  montant_paye          Decimal       @default(0) @db.Decimal(10, 2)
+  date_creation         DateTime      @default(now())
+  date_modification     DateTime      @default(now()) @updatedAt
+
+  // Relations
+  user              User                  @relation(fields: [user_id], references: [id])
+  car               Car                   @relation(fields: [car_id], references: [id], onDelete: Cascade)
+  status            BookingStatus         @relation(fields: [status_id], references: [id])
+  payments          Payment[]
+  invoices          Invoice[]
+  rentalContract    RentalContract?
+  loyaltyTransactions LoyaltyTransaction[]
+  additionalDrivers AdditionalDriver[]
+
+  @@map("booking")
+}
+
+model BookingStatus {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique @db.VarChar(50)
+  description String?  @db.Text
+  created_at  DateTime @default(now())
+
+  // Relations
+  bookings Booking[]
+
+  @@map("booking_status")
+}
+
+model AdditionalDriver {
+  id          Int      @id @default(autoincrement())
+  booking_id  Int
+  user_id     Int
+  nom         String   @db.VarChar(100)
+  prenom      String   @db.VarChar(100)
+  permis_numero String @db.VarChar(50)
+  permis_date DateTime @db.Date
+  created_at  DateTime @default(now())
+
+  // Relations
+  booking Booking @relation(fields: [booking_id], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [user_id], references: [id])
+
+  @@map("additional_driver")
+}
+
+// =============================================
+// CONTRACT SYSTEM
+// =============================================
+
+model RentalContract {
+  id                Int      @id @default(autoincrement())
+  booking_id        Int      @unique
+  template_id       Int
+  contract_number   String   @unique @db.VarChar(50)
+  contract_data     String   @db.Text // JSON
+  pdf_path          String?  @db.VarChar(500)
+  signed_at         DateTime?
+  created_at        DateTime @default(now())
+  updated_at        DateTime @default(now()) @updatedAt
+
+  // Relations
+  booking  Booking          @relation(fields: [booking_id], references: [id], onDelete: Cascade)
+  template ContractTemplate @relation(fields: [template_id], references: [id])
+
+  @@map("rental_contract")
+}
+
+model ContractTemplate {
+  id          Int      @id @default(autoincrement())
+  name        String   @db.VarChar(100)
+  template    String   @db.Text
+  version     String   @db.VarChar(10)
+  is_active   Boolean  @default(true)
+  created_at  DateTime @default(now())
+
+  // Relations
+  contracts RentalContract[]
+
+  @@map("contract_template")
+}
+
+// =============================================
+// PAYMENT & INVOICE SYSTEM
+// =============================================
+
+model Payment {
+  id                    Int           @id @default(autoincrement())
+  booking_id           Int
+  user_id              Int
+  amount               Decimal       @db.Decimal(10, 2)
+  currency             String        @default("MAD") @db.VarChar(5)
+  status               PaymentStatus @default(CREATED)
+  provider             String        @default("stripe") @db.VarChar(20)
+  provider_session_id  String?       @db.VarChar(255)
+  provider_payment_id  String?       @db.VarChar(255)
+  metadata             String?       @db.Text // JSON
+  created_at           DateTime      @default(now())
+  updated_at           DateTime      @default(now()) @updatedAt
+
+  // Relations
+  booking  Booking   @relation(fields: [booking_id], references: [id])
+  user     User      @relation(fields: [user_id], references: [id])
+  invoices Invoice[]
+
+  @@map("payment")
+}
+
+enum PaymentStatus {
+  CREATED
+  PENDING
+  COMPLETED
+  FAILED
+  CANCELLED
+  REFUNDED
+
+  @@map("payment_status")
+}
+
+model Invoice {
+  id             Int           @id @default(autoincrement())
+  user_id        Int
+  booking_id     Int
+  payment_id     Int?
+  invoice_number String        @unique @db.VarChar(50)
+  amount         Decimal       @db.Decimal(10, 2)
+  currency       String        @default("MAD") @db.VarChar(5)
+  status         InvoiceStatus @default(PENDING)
+  pdf_path       String?       @db.VarChar(500)
+  metadata       String?       @db.Text // JSON
+  created_at     DateTime      @default(now())
+  updated_at     DateTime      @default(now()) @updatedAt
+
+  // Relations
+  user    User     @relation(fields: [user_id], references: [id])
+  booking Booking  @relation(fields: [booking_id], references: [id])
+  payment Payment? @relation(fields: [payment_id], references: [id])
+
+  @@map("invoice")
+}
+
+enum InvoiceStatus {
+  PENDING
+  PAID
+  OVERDUE
+  CANCELLED
+
+  @@map("invoice_status")
+}
+
+// =============================================
+// INSURANCE & DRIVER SYSTEM
+// =============================================
+
+model Insurance {
+  id           Int      @id @default(autoincrement())
+  name         String   @db.VarChar(100)
+  description  String?  @db.Text
+  coverage     String   @db.Text // JSON
+  price        Decimal  @db.Decimal(10, 2)
+  is_active    Boolean  @default(true)
+  created_at   DateTime @default(now())
+
+  @@map("insurance")
+}
+
+model Driver {
+  id            Int      @id @default(autoincrement())
+  nom           String   @db.VarChar(100)
+  prenom        String   @db.VarChar(100)
+  permis_numero String   @db.VarChar(50)
+  permis_date   DateTime @db.Date
+  created_at    DateTime @default(now())
+
+  @@map("driver")
+}
+
+// =============================================
+// REVIEW SYSTEM
+// =============================================
+
+model Review {
+  id         Int      @id @default(autoincrement())
+  user_id    Int
+  car_id     Int?
+  rating     Int      @db.SmallInt
+  comment    String?  @db.Text
+  is_verified Boolean @default(false)
+  created_at DateTime @default(now())
+
+  // Relations
+  user User @relation(fields: [user_id], references: [id])
+
+  @@map("review")
+}
+
+// =============================================
+// MAINTENANCE SYSTEM
+// =============================================
+
+model Maintenance {
+  id               Int               @id @default(autoincrement())
+  car_id           Int
+  maintenance_type MaintenanceType
+  description      String            @db.Text
+  cost             Decimal?          @db.Decimal(10, 2)
+  scheduled_date   DateTime          @db.Date
+  completed_date   DateTime?         @db.Date
+  status           MaintenanceStatus @default(SCHEDULED)
+  created_at       DateTime          @default(now())
+
+  // Relations
+  car Car @relation(fields: [car_id], references: [id], onDelete: Cascade)
+
+  @@map("maintenance")
+}
+
+enum MaintenanceType {
+  ROUTINE
+  REPAIR
+  INSPECTION
+  CLEANING
+
+  @@map("maintenance_type")
+}
+
+enum MaintenanceStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+
+  @@map("maintenance_status")
+}
+
+// =============================================
+// DOCUMENT SYSTEM
+// =============================================
+
+model Document {
+  id                Int            @id @default(autoincrement())
+  user_id           Int?
+  booking_id        Int?
+  filename          String?        @db.VarChar(255)
+  original_filename String?        @db.VarChar(255)
+  file_path         String?        @db.VarChar(500)
+  file_type         String?        @db.VarChar(50)
+  file_size         Int?
+  ocr_content       String?        @db.Text
+  ocr_confidence    Decimal?       @db.Decimal(5, 2)
+  document_type     String?        @db.VarChar(50)
+  status            DocumentStatus @default(PROCESSING)
+  metadata          String?        @db.Text // JSON
+  created_at        DateTime       @default(now())
+  updated_at        DateTime       @default(now()) @updatedAt
+
+  // Relations
+  user User? @relation(fields: [user_id], references: [id])
+
+  @@map("document")
+}
+
+enum DocumentStatus {
+  PROCESSING
+  COMPLETED
+  FAILED
+
+  @@map("document_status")
+}
+
+// =============================================
+// ADMIN SYSTEM
+// =============================================
+
+model Admin {
+  id          Int      @id @default(autoincrement())
+  user_id     Int      @unique
+  permissions String   @db.Text // JSON
+  created_at  DateTime @default(now())
+
+  @@map("admin")
+}
+
+// =============================================
+// NOTIFICATION SYSTEM
+// =============================================
+
+model Notification {
+  id         Int                @id @default(autoincrement())
+  user_id    Int
+  title      String             @db.VarChar(255)
+  message    String             @db.Text
+  type       NotificationType
+  is_read    Boolean            @default(false)
+  created_at DateTime           @default(now())
+
+  // Relations
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("notification")
+}
+
+enum NotificationType {
+  BOOKING
+  PAYMENT
+  SYSTEM
+  PROMOTION
+
+  @@map("notification_type")
+}
+
+// =============================================
+// PROMOTION SYSTEM
+// =============================================
+
+model Promotion {
+  id          Int      @id @default(autoincrement())
+  name        String   @db.VarChar(100)
+  description String?  @db.Text
+  discount    Decimal  @db.Decimal(5, 2)
+  start_date  DateTime @db.Date
+  end_date    DateTime @db.Date
+  is_active   Boolean  @default(true)
+  created_at  DateTime @default(now())
+
+  // Relations
+  categories PromotionCategory[]
+
+  @@map("promotion")
+}
+
+model PromotionCategory {
+  id           Int @id @default(autoincrement())
+  promotion_id Int
+  category_id  Int
+
+  // Relations
+  promotion Promotion   @relation(fields: [promotion_id], references: [id], onDelete: Cascade)
+  category  CarCategory @relation(fields: [category_id], references: [id], onDelete: Cascade)
+
+  @@unique([promotion_id, category_id])
+  @@map("promotion_category")
+}
+
+// =============================================
+// CHAT SYSTEM
+// =============================================
+
+model ChatConversation {
+  id         Int      @id @default(autoincrement())
+  user_id    Int?
+  session_id String   @unique @default(uuid()) @db.Uuid
+  status     String   @default("active") @db.VarChar(20)
+  created_at DateTime @default(now())
+  updated_at DateTime @default(now()) @updatedAt
+
+  // Relations
+  user     User?         @relation(fields: [user_id], references: [id])
+  messages ChatMessage[]
+
+  @@map("chat_conversation")
+}
+
+model ChatMessage {
+  id              Int      @id @default(autoincrement())
+  conversation_id Int
+  sender          String   @db.VarChar(20) // 'user' or 'bot'
+  message         String   @db.Text
+  message_type    String   @default("text") @db.VarChar(50)
+  metadata        String?  @db.Text // JSON
+  created_at      DateTime @default(now())
+
+  // Relations
+  conversation ChatConversation @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+
+  @@map("chat_message")
+}

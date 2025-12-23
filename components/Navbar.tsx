@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
-import { User, LogOut, Menu, X } from 'lucide-react';
+import { User, LogOut, Menu, X, Shield } from 'lucide-react';
 import { useState, useEffect } from 'react';
 
 export default function Navbar() {
@@ -85,14 +85,15 @@ export default function Navbar() {
                 >
                   Mes Réservations
                 </Link>
-                {user.role === 'admin' && (
+                {user.role === 'ADMIN' && (
                   <Link
                     href="/admin"
                     className={`${
-                      pathname === '/admin' ? 'text-gold-400' : 'text-primary-100'
-                    } hover:text-white transition-colors duration-300 text-sm tracking-wide uppercase`}
+                      pathname.startsWith('/admin') ? 'text-gold-400' : 'text-primary-100'
+                    } hover:text-white transition-colors duration-300 text-sm tracking-wide uppercase flex items-center space-x-1`}
                   >
-                    Administration
+                    <Shield className="h-4 w-4" />
+                    <span>Admin</span>
                   </Link>
                 )}
                 <div className="flex items-center space-x-4 pl-4 border-l border-primary-800">
@@ -170,13 +171,14 @@ export default function Navbar() {
                 >
                   Mes Réservations
                 </Link>
-                {user.role === 'admin' && (
+                {user.role === 'ADMIN' && (
                   <Link
                     href="/admin"
-                    className="block px-3 py-2 rounded-md text-primary-100 hover:bg-primary-900 hover:text-gold-400"
+                    className="block px-3 py-2 rounded-md text-primary-100 hover:bg-primary-900 hover:text-gold-400 flex items-center space-x-2"
                     onClick={() => setIsMenuOpen(false)}
                   >
-                    Administration
+                    <Shield className="h-4 w-4" />
+                    <span>Administration</span>
                   </Link>
                 )}
                 <Link

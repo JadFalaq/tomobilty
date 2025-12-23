@@ -33,14 +33,30 @@ export default function InscriptionPage() {
       return;
     }
 
-    if (formData.motDePasse.length < 6) {
-      setError('Le mot de passe doit contenir au moins 6 caractères');
+    if (formData.motDePasse.length < 8) {
+      setError('Le mot de passe doit contenir au moins 8 caractères');
+      return;
+    }
+
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/;
+    if (!passwordRegex.test(formData.motDePasse)) {
+      setError('Le mot de passe doit contenir au moins une minuscule, une majuscule et un chiffre');
+      return;
+    }
+
+    const phoneRegex = /^(\+212|0)[5-7][0-9]{8}$/;
+    if (formData.telephone && !phoneRegex.test(formData.telephone)) {
+      setError('Numéro de téléphone marocain invalide (ex: +212 6XXXXXXXX ou 06XXXXXXXX)');
       return;
     }
 
     try {
       setLoading(true);
-      const { confirmMotDePasse, ...dataToSend } = formData;
+      const { confirmMotDePasse, motDePasse, ...rest } = formData;
+      const dataToSend = {
+        ...rest,
+        mot_de_passe: motDePasse
+      };
       const response = await authAPI.inscription(dataToSend);
       
       setSuccess(true);
@@ -48,7 +64,8 @@ export default function InscriptionPage() {
         setPreviewUrl(response.data.previewUrl);
       }
     } catch (error: any) {
-      setError(error.response?.data?.message || 'Erreur lors de l\'inscription');
+      const errorMessage = error.response?.data?.errors?.[0]?.message || error.response?.data?.message || 'Erreur lors de l\'inscription';
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
