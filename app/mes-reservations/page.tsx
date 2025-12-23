@@ -29,13 +29,13 @@ export default function MesReservationsPage() {
       setLoading(true);
       // Charger les réservations
       const resReservations = await reservationsAPI.obtenirMesReservations();
-      setReservations(resReservations.data);
+      setReservations(resReservations.data.data.bookings || resReservations.data.data || []);
 
       // Charger le profil utilisateur pour les points
       const resUser = await authAPI.obtenirProfil();
-      setUser(resUser.data);
+      setUser(resUser.data.data.user);
       // Mettre à jour le localStorage si nécessaire
-      localStorage.setItem('user', JSON.stringify(resUser.data));
+      localStorage.setItem('user', JSON.stringify(resUser.data.data.user));
     } catch (error) {
       console.error('Erreur lors du chargement des données:', error);
     } finally {

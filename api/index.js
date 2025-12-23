@@ -12,7 +12,7 @@ const loyaltyRoutes = require('../src/routes/loyalty.routes');
 const paymentRoutes = require('../src/routes/payment.routes');
 const contractRoutes = require('../src/routes/contract.routes');
 const reviewRoutes = require('../src/routes/review.routes');
-const adminRoutes = require('../src/routes/admin.routes');
+const adminRoutesComplete = require('../src/routes/admin.routes.complete');
 const testRoutes = require('../src/routes/test.routes');
 
 // Import middlewares
@@ -51,7 +51,7 @@ app.use('/api/loyalty', loyaltyRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/contracts', contractRoutes);
 app.use('/api/reviews', reviewRoutes);
-app.use('/api/admin', adminRoutes);
+app.use('/api/admin', adminRoutesComplete);
 app.use('/api/test', testRoutes);
 
 // 404 handler

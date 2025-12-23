@@ -48,7 +48,7 @@ export default function VoituresPage() {
       params.ordre = filtres.ordre;
 
       const response = await voituresAPI.obtenirVoitures(params);
-      setVoitures(response.data);
+      setVoitures(response.data.data.cars || response.data.data || []);
     } catch (error) {
       console.error('Erreur:', error);
     } finally {

@@ -1,19 +1,10 @@
 const { PrismaClient } = require('@prisma/client');
-const { PrismaPg } = require('@prisma/adapter-pg');
-const { Pool } = require('pg');
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: {
-    rejectUnauthorized: false
-  }
-});
-
-const adapter = new PrismaPg(pool);
+// Disable SSL certificate verification for development
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
 const prisma = new PrismaClient({
-  adapter,
-  log: ['query', 'info', 'warn', 'error'],
+  log: ['error', 'warn'],
 });
 
 // Test database connection (non-blocking)

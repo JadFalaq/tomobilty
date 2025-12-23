@@ -41,8 +41,8 @@ api.interceptors.response.use(
 export const authAPI = {
   inscription: (data: any) => api.post('/auth/inscription', data),
   connexion: (data: any) => api.post('/auth/connexion', data),
-  obtenirProfil: () => api.get('/auth/profil'),
-  mettreAJourProfil: (data: any) => api.put('/auth/profil', data),
+  obtenirProfil: () => api.get('/auth/me'),
+  mettreAJourProfil: (data: any) => api.put('/auth/profile', data),
   oauthGoogle: (data: any) => api.post('/auth/oauth/google', data),
   startPhone: (data: any) => api.post('/auth/phone/start', data),
   verifyPhone: (data: any) => api.post('/auth/phone/verify', data),
@@ -50,28 +50,28 @@ export const authAPI = {
 
 // API Voitures
 export const voituresAPI = {
-  obtenirVoitures: (params?: any) => api.get('/voitures', { params }),
-  obtenirVoitureParId: (id: string) => api.get(`/voitures/${id}`),
-  verifierDisponibilite: (id: string, data: any) => api.post(`/voitures/${id}/disponibilite`, data),
-  creerVoiture: (data: any) => api.post('/voitures', data),
-  mettreAJourVoiture: (id: string, data: any) => api.put(`/voitures/${id}`, data),
-  supprimerVoiture: (id: string) => api.delete(`/voitures/${id}`),
+  obtenirVoitures: (params?: any) => api.get('/cars', { params }),
+  obtenirVoitureParId: (id: string) => api.get(`/cars/${id}`),
+  verifierDisponibilite: (id: string, data: any) => api.get(`/cars/${id}/availability`, { params: data }),
+  creerVoiture: (data: any) => api.post('/cars', data),
+  mettreAJourVoiture: (id: string, data: any) => api.put(`/cars/${id}`, data),
+  supprimerVoiture: (id: string) => api.delete(`/cars/${id}`),
 };
 
 // API Réservations
 export const reservationsAPI = {
-  creerReservation: (data: any) => api.post('/reservations', data),
-  confirmerReservation: (id: string, data: any) => api.put(`/reservations/${id}/confirmer`, data),
-  obtenirMesReservations: () => api.get('/reservations/mes-reservations'),
-  obtenirToutesReservations: (params?: any) => api.get('/reservations', { params }),
-  obtenirReservationParId: (id: string) => api.get(`/reservations/${id}`),
-  annulerReservation: (id: string) => api.put(`/reservations/${id}/annuler`),
-  mettreAJourStatut: (id: string, data: any) => api.put(`/reservations/${id}/statut`, data),
+  creerReservation: (data: any) => api.post('/bookings', data),
+  confirmerReservation: (id: string, data: any) => api.put(`/bookings/${id}/confirm`, data),
+  obtenirMesReservations: () => api.get('/bookings'),
+  obtenirToutesReservations: (params?: any) => api.get('/bookings/admin', { params }),
+  obtenirReservationParId: (id: string) => api.get(`/bookings/${id}`),
+  annulerReservation: (id: string) => api.put(`/bookings/${id}/cancel`),
+  mettreAJourStatut: (id: string, data: any) => api.put(`/bookings/${id}/status`, data),
 };
 
 // API Paiements
 export const paymentsAPI = {
-  createCheckoutSession: (data: any) => api.post('/payments/create-checkout-session', data),
+  createCheckoutSession: (data: any) => api.post('/payments/create-session', data),
 };
 
 export default api;

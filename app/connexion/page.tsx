@@ -55,16 +55,30 @@ function ConnexionForm() {
       setLoading(true);
       console.log('Tentative de connexion avec:', formData.email);
       
-      const response = await authAPI.connexion(formData);
+      // Convert camelCase to snake_case for backend
+      const loginData = {
+        email: formData.email,
+        mot_de_passe: formData.motDePasse
+      };
+      const response = await authAPI.connexion(loginData);
       console.log('Réponse de connexion:', response.data);
       
-      localStorage.setItem('token', response.data.token);
-      localStorage.setItem('user', JSON.stringify(response.data));
+      localStorage.setItem('token', response.data.data.tokens.access);
+      localStorage.setItem('user', JSON.stringify(response.data.data.user));
       
-      console.log('Données sauvegardées, redirection vers:', redirect);
+      // Redirect based on user role
+      const userRole = response.data.data.user.role;
+      let redirectUrl = redirect;
+      
+      if (userRole === 'ADMIN') {
+        redirectUrl = '/admin';
+        console.log('Admin user detected, redirecting to admin dashboard');
+      } else {
+        console.log('Regular user, redirecting to:', redirect);
+      }
 
       setTimeout(() => {
-        window.location.href = redirect;
+        window.location.href = redirectUrl;
       }, 100);
     } catch (error: any) {
       console.error('Erreur de connexion:', error);
@@ -78,8 +92,8 @@ function ConnexionForm() {
     try {
       setGoogleLoading(true);
       const response = await authAPI.oauthGoogle({ id_token: credential });
-      localStorage.setItem('token', response.data.token);
-      localStorage.setItem('user', JSON.stringify(response.data));
+      localStorage.setItem('token', response.data.data.tokens.access);
+      localStorage.setItem('user', JSON.stringify(response.data.data.user));
       setTimeout(() => { window.location.href = redirect; }, 100);
     } catch (err: any) {
       setError(err.response?.data?.message || 'Erreur Google');

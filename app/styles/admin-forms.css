@@ -1,0 +1,169 @@
+/* CRITICAL UI FIX - Form Elements Visibility */
+/* This file ensures all form inputs, dropdowns, and buttons have proper color contrast */
+
+/* ============================================
+   TEXT INPUT FIELDS - Base Styling
+   ============================================ */
+input[type="text"],
+input[type="email"],
+input[type="tel"],
+input[type="password"],
+input[type="number"],
+input[type="date"],
+input[type="search"],
+input[type="url"],
+textarea {
+  background-color: white !important;
+  color: #1f2937 !important;
+  border: 1px solid #d1d5db !important;
+  padding: 10px 12px;
+  border-radius: 6px;
+  font-size: 14px;
+  transition: all 0.2s ease;
+}
+
+/* Focus state for inputs */
+input[type="text"]:focus,
+input[type="email"]:focus,
+input[type="tel"]:focus,
+input[type="password"]:focus,
+input[type="number"]:focus,
+input[type="date"]:focus,
+input[type="search"]:focus,
+input[type="url"]:focus,
+textarea:focus {
+  outline: none;
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  color: #1f2937 !important;
+  background-color: white !important;
+}
+
+/* Placeholder text */
+input::placeholder,
+textarea::placeholder {
+  color: #9ca3af !important;
+  opacity: 1;
+}
+
+/* Disabled state */
+input:disabled,
+textarea:disabled,
+select:disabled {
+  background-color: #f3f4f6 !important;
+  color: #6b7280 !important;
+  cursor: not-allowed;
+  border-color: #e5e7eb !important;
+}
+
+/* ============================================
+   SELECT DROPDOWN FIELDS
+   ============================================ */
+select {
+  background-color: white !important;
+  color: #1f2937 !important;
+  border: 1px solid #d1d5db !important;
+  padding: 10px 12px;
+  border-radius: 6px;
+  font-size: 14px;
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E");
+  background-position: right 10px center;
+  background-repeat: no-repeat;
+  background-size: 20px;
+  padding-right: 40px;
+}
+
+select:focus {
+  outline: none;
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  color: #1f2937 !important;
+  background-color: white !important;
+}
+
+/* Dropdown options */
+select option {
+  background-color: white !important;
+  color: #1f2937 !important;
+  padding: 10px 12px;
+  font-size: 14px;
+}
+
+select option:checked {
+  background-color: #3b82f6 !important;
+  color: white !important;
+  font-weight: 500;
+}
+
+select option:hover {
+  background-color: #eff6ff !important;
+  color: #1f2937 !important;
+}
+
+/* ============================================
+   FORM LABELS AND TEXT
+   ============================================ */
+label {
+  color: #374151 !important;
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 6px;
+  display: block;
+}
+
+.form-helper-text,
+.helper-text,
+small {
+  color: #6b7280 !important;
+  font-size: 12px;
+}
+
+.error-message,
+.form-error,
+.text-error {
+  color: #ef4444 !important;
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.success-message,
+.text-success {
+  color: #10b981 !important;
+  font-size: 12px;
+}
+
+/* ============================================
+   MODAL/DIALOG BACKGROUNDS
+   ============================================ */
+.modal,
+.dialog,
+.drawer {
+  background-color: white !important;
+  color: #1f2937 !important;
+}
+
+.modal-header,
+.dialog-header {
+  background-color: #f9fafb !important;
+  color: #1f2937 !important;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.modal-body,
+.dialog-content {
+  background-color: white !important;
+  color: #1f2937 !important;
+  padding: 20px;
+}
+
+.modal-footer,
+.dialog-actions {
+  background-color: #f9fafb !important;
+  border-top: 1px solid #e5e7eb;
+  padding: 16px 20px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
