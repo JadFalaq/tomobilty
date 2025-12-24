@@ -1,23 +1,39 @@
 const { PrismaClient } = require('@prisma/client');
+require('dotenv').config({ override: true });
 
 // Disable SSL certificate verification for development
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
 const prisma = new PrismaClient({
   log: ['error', 'warn'],
+  datasources: {
+    db: {
+      url: process.env.DATABASE_URL
+    }
+  }
 });
 
-// Test database connection (non-blocking)
-const connectDatabase = async () => {
-  try {
-    await prisma.$connect();
-    console.log('✅ Database connected successfully');
-    return true;
-  } catch (error) {
-    console.error('❌ Prisma connection error:', error);
-    console.log('⚠️  API will continue running with mock data');
-    return false;
+// Test database connection with retry logic
+const connectDatabase = async (retries = 3, delay = 2000) => {
+  for (let i = 0; i < retries; i++) {
+    try {
+      await prisma.$connect();
+      console.log('✅ Database connected successfully');
+      return true;
+    } catch (error) {
+      console.error(`❌ Prisma connection attempt ${i + 1}/${retries} failed:`, error.message);
+      
+      if (i < retries - 1) {
+        console.log(`⏳ Retrying in ${delay/1000}s...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        delay *= 1.5; // Exponential backoff
+      } else {
+        console.log('⚠️  All connection attempts failed. API will continue running with mock data');
+        return false;
+      }
+    }
   }
+  return false;
 };
 
 // Graceful shutdown

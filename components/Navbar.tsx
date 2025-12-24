@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
-import { User, LogOut, Menu, X, Shield } from 'lucide-react';
+import { User, LogOut, Menu, X, Shield, Trophy } from 'lucide-react';
 import { useState, useEffect } from 'react';
 
 export default function Navbar() {
@@ -84,6 +84,15 @@ export default function Navbar() {
                   } hover:text-white transition-colors duration-300 text-sm tracking-wide uppercase`}
                 >
                   Mes Réservations
+                </Link>
+                <Link
+                  href="/loyalty"
+                  className={`${
+                    pathname === '/loyalty' ? 'text-gold-400' : 'text-primary-100'
+                  } hover:text-white transition-colors duration-300 text-sm tracking-wide uppercase flex items-center space-x-1`}
+                >
+                  <Trophy className="h-4 w-4" />
+                  <span>Fidélité</span>
                 </Link>
                 {user.role === 'ADMIN' && (
                   <Link
@@ -170,6 +179,14 @@ export default function Navbar() {
                   onClick={() => setIsMenuOpen(false)}
                 >
                   Mes Réservations
+                </Link>
+                <Link
+                  href="/loyalty"
+                  className="block px-3 py-2 rounded-md text-primary-100 hover:bg-primary-900 hover:text-gold-400 flex items-center space-x-2"
+                  onClick={() => setIsMenuOpen(false)}
+                >
+                  <Trophy className="h-4 w-4" />
+                  <span>Programme Fidélité</span>
                 </Link>
                 {user.role === 'ADMIN' && (
                   <Link

@@ -74,12 +74,12 @@ const getDashboardStats = asyncHandler(async (req, res) => {
     // Loyalty stats
     const loyaltyTotal = await prisma.loyaltyAccount.count().catch(() => 0);
     const pointsEarned = await prisma.loyaltyTransaction.aggregate({
-      where: { transaction_type: 'EARN' },
+      where: { type: 'EARNED' },
       _sum: { points: true }
     }).catch(() => ({ _sum: { points: 0 } }));
 
     const pointsRedeemed = await prisma.loyaltyTransaction.aggregate({
-      where: { transaction_type: 'REDEEM' },
+      where: { type: 'REDEEMED' },
       _sum: { points: true }
     }).catch(() => ({ _sum: { points: 0 } }));
 

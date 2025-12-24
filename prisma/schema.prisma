@@ -61,10 +61,36 @@ model PhoneVerification {
   @@map("phone_verifications")
 }
 
+// Enum corrigé
+enum LoyaltyTransactionType {
+  EARNED
+  REDEEMED
+  EXPIRED
+  BONUS      // ← AJOUTÉ
+  REFUNDED   // ← AJOUTÉ
+}
+
+// Modèle loyalty_tier avec les nouveaux champs
+model LoyaltyTier {
+  id                Int              @id @default(autoincrement())
+  name              String           @db.VarChar(50)
+  min_points        Int              // ← Valeurs corrigées dans la DB
+  max_points        Int?             // ← AJOUTÉ (optionnel)
+  discount_percent  Decimal          @db.Decimal(5, 2)
+  points_multiplier Decimal          @default(1.0) @db.Decimal(3, 1) // ← AJOUTÉ
+  benefits          String?
+  created_at        DateTime         @default(now())
+  loyaltyAccounts   LoyaltyAccount[]
+
+  @@map("loyalty_tier")
+}
+
+// Modèle loyalty_account mis à jour
 model LoyaltyAccount {
   id             Int                  @id @default(autoincrement())
   user_id        Int                  @unique
-  points_balance Int                  @default(0)
+  points_balance Int                  @default(0)  // Points actuels
+  lifetime_points Int                 @default(0)  // Total points gagnés (pour upgrade)
   tier_id        Int                  @default(1)
   total_spent    Decimal              @default(0) @db.Decimal(10, 2)
   created_at     DateTime             @default(now())
@@ -74,32 +100,6 @@ model LoyaltyAccount {
   transactions   LoyaltyTransaction[]
 
   @@map("loyalty_account")
-}
-
-model LoyaltyTier {
-  id               Int              @id @default(autoincrement())
-  name             String           @db.VarChar(50)
-  min_points       Int
-  discount_percent Decimal          @db.Decimal(5, 2)
-  benefits         String?
-  created_at       DateTime         @default(now())
-  loyaltyAccounts  LoyaltyAccount[]
-
-  @@map("loyalty_tier")
-}
-
-model LoyaltyTransaction {
-  id                 Int                    @id @default(autoincrement())
-  loyalty_account_id Int
-  points             Int
-  transaction_type   LoyaltyTransactionType
-  description        String?
-  booking_id         Int?
-  created_at         DateTime               @default(now())
-  booking            Booking?               @relation(fields: [booking_id], references: [id])
-  loyaltyAccount     LoyaltyAccount         @relation(fields: [loyalty_account_id], references: [id], onDelete: Cascade)
-
-  @@map("loyalty_transaction")
 }
 
 model LoyaltyReward {
@@ -113,6 +113,21 @@ model LoyaltyReward {
   created_at   DateTime @default(now())
 
   @@map("loyalty_reward")
+}
+
+model LoyaltyTransaction {
+  id                  Int                     @id @default(autoincrement())
+  loyalty_account_id  Int
+  booking_id          Int?
+  type                LoyaltyTransactionType
+  points              Int
+  description         String?
+  created_at          DateTime                @default(now())
+  
+  loyaltyAccount      LoyaltyAccount          @relation(fields: [loyalty_account_id], references: [id], onDelete: Cascade)
+  booking             Booking?                @relation(fields: [booking_id], references: [id])
+
+  @@map("loyalty_transaction")
 }
 
 model Car {
@@ -503,13 +518,6 @@ enum Role {
   @@map("role")
 }
 
-enum LoyaltyTransactionType {
-  EARNED
-  REDEEMED
-  EXPIRED
-
-  @@map("loyalty_transaction_type")
-}
 
 enum CarStatus {
   DISPONIBLE

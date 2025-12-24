@@ -1,241 +1,134 @@
-const prisma = require('../config/prisma');
-const { AppError, asyncHandler } = require('../middlewares/errorHandler.middleware');
-const { calculateRentalDays, generateBookingReference } = require('../utils/validation.util');
-const { sendBookingConfirmation } = require('../utils/email.util');
-const loyaltyService = require('../services/loyalty.service');
+const bookingService = require('../services/booking.service');
+const availabilityService = require('../services/availability.service');
+const contractService = require('../services/contract.service');
+const invoiceService = require('../services/invoice.service');
+const { asyncHandler } = require('../middlewares/errorHandler.middleware');
+const {
+  BookingNotFoundError,
+  CarNotAvailableError,
+  InvalidDriverLicenseError,
+  InvalidBookingStatusError,
+  BookingCancellationError
+} = require('../errors/booking.errors');
 
-// Get user's bookings
-const getUserBookings = asyncHandler(async (req, res) => {
-  const { page = 1, limit = 10, status } = req.query;
-  const skip = (parseInt(page) - 1) * parseInt(limit);
+/**
+ * POST /api/bookings/check-availability
+ * Check car availability for specified dates
+ */
+const checkAvailability = asyncHandler(async (req, res) => {
+  const { car_id, date_debut, date_fin } = req.body;
 
-  const where = {
+  if (!car_id || !date_debut || !date_fin) {
+    return res.status(400).json({
+      success: false,
+      message: 'ID voiture, date de début et date de fin requis'
+    });
+  }
+
+  const availability = await bookingService.checkAvailability(car_id, date_debut, date_fin);
+
+  res.json({
+    success: true,
+    data: availability
+  });
+});
+
+/**
+ * POST /api/bookings/calculate-price
+ * Calculate booking price with all fees and discounts
+ */
+const calculatePrice = asyncHandler(async (req, res) => {
+  const { car_id, date_debut, date_fin, insurance_id, additional_drivers } = req.body;
+  const userId = req.user?.id;
+
+  if (!car_id || !date_debut || !date_fin) {
+    return res.status(400).json({
+      success: false,
+      message: 'ID voiture, date de début et date de fin requis'
+    });
+  }
+
+  const pricing = await bookingService.calculateBookingPrice({
+    carId: car_id,
+    dateDebut: date_debut,
+    dateFin: date_fin,
+    userId,
+    insuranceId: insurance_id,
+    additionalDrivers: additional_drivers || []
+  });
+
+  res.json({
+    success: true,
+    data: pricing
+  });
+});
+
+/**
+ * POST /api/bookings
+ * Create a new booking
+ */
+const createBooking = asyncHandler(async (req, res) => {
+  const bookingData = {
+    ...req.body,
     user_id: req.user.id
   };
 
-  if (status) {
-    where.status = {
-      name: status
-    };
+  const result = await bookingService.createBooking(bookingData);
+
+  res.status(201).json({
+    success: true,
+    message: 'Réservation créée avec succès',
+    data: result
+  });
+});
+
+/**
+ * GET /api/bookings/user/:userId
+ * Get user bookings with filters
+ */
+const getUserBookings = asyncHandler(async (req, res) => {
+  const userId = req.params.userId ? parseInt(req.params.userId) : req.user.id;
+  
+  // Ensure user can only access their own bookings (unless admin)
+  if (userId !== req.user.id && req.user.role !== 'ADMIN') {
+    return res.status(403).json({
+      success: false,
+      message: 'Accès non autorisé'
+    });
   }
 
-  const [bookings, total] = await Promise.all([
-    prisma.booking.findMany({
-      where,
-      include: {
-        car: {
-          include: {
-            brand: true,
-            category: true,
-            images: {
-              where: { is_primary: true },
-              take: 1
-            }
-          }
-        },
-        status: true,
-        payments: true,
-        rentalContract: true
-      },
-      orderBy: {
-        date_creation: 'desc'
-      },
-      skip,
-      take: parseInt(limit)
-    }),
-    prisma.booking.count({ where })
-  ]);
+  const filters = {
+    status: req.query.status,
+    date_from: req.query.date_from,
+    date_to: req.query.date_to,
+    limit: req.query.limit || 20,
+    offset: req.query.offset || 0
+  };
+
+  const bookings = await bookingService.getUserBookings(userId, filters);
 
   res.json({
     success: true,
     data: {
       bookings,
       pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
-        total,
-        pages: Math.ceil(total / parseInt(limit))
+        limit: parseInt(filters.limit),
+        offset: parseInt(filters.offset),
+        total: bookings.length
       }
     }
   });
 });
 
-// Create new booking
-const createBooking = asyncHandler(async (req, res) => {
-  const {
-    car_id,
-    date_debut,
-    date_fin,
-    lieu_prise_en_charge,
-    lieu_retour
-  } = req.body;
-
-  // Check car availability
-  const car = await prisma.car.findUnique({
-    where: { id: parseInt(car_id) },
-    include: {
-      brand: true,
-      category: true
-    }
-  });
-
-  if (!car) {
-    throw new AppError('Voiture non trouvée', 404, 'CAR_NOT_FOUND');
-  }
-
-  if (!car.disponible || car.statut !== 'DISPONIBLE') {
-    throw new AppError('Voiture indisponible', 400, 'CAR_UNAVAILABLE');
-  }
-
-  // Check for conflicting bookings
-  const conflictingBooking = await prisma.booking.findFirst({
-    where: {
-      car_id: parseInt(car_id),
-      AND: [
-        {
-          OR: [
-            {
-              date_debut: {
-                lte: new Date(date_fin)
-              }
-            },
-            {
-              date_fin: {
-                gte: new Date(date_debut)
-              }
-            }
-          ]
-        },
-        {
-          status: {
-            name: {
-              notIn: ['CANCELLED', 'REJECTED']
-            }
-          }
-        }
-      ]
-    }
-  });
-
-  if (conflictingBooking) {
-    throw new AppError('Voiture déjà réservée pour ces dates', 400, 'CAR_ALREADY_BOOKED');
-  }
-
-  // Calculate pricing
-  const rentalDays = calculateRentalDays(date_debut, date_fin);
-  let totalPrice = car.prix_par_jour * rentalDays;
-
-  // Get user's loyalty account for discount
-  const loyaltyAccount = await prisma.loyaltyAccount.findUnique({
-    where: { user_id: req.user.id },
-    include: { tier: true }
-  });
-
-  let loyaltyDiscount = 0;
-  if (loyaltyAccount && loyaltyAccount.tier.discount_percent > 0) {
-    loyaltyDiscount = (totalPrice * loyaltyAccount.tier.discount_percent) / 100;
-    totalPrice = totalPrice - loyaltyDiscount;
-  }
-
-  // Get default booking status (should be "PENDING")
-  const defaultStatus = await prisma.bookingStatus.findFirst({
-    where: { name: 'PENDING' }
-  });
-
-  if (!defaultStatus) {
-    throw new AppError('Statut de réservation par défaut non trouvé', 500, 'MISSING_DEFAULT_STATUS');
-  }
-
-  // Create booking
-  const booking = await prisma.booking.create({
-    data: {
-      user_id: req.user.id,
-      car_id: parseInt(car_id),
-      date_debut: new Date(date_debut),
-      date_fin: new Date(date_fin),
-      lieu_prise_en_charge,
-      lieu_retour,
-      prix_total: totalPrice,
-      status_id: defaultStatus.id
-    },
-    include: {
-      car: {
-        include: {
-          brand: true,
-          category: true
-        }
-      },
-      status: true,
-      user: {
-        select: {
-          id: true,
-          email: true,
-          nom: true,
-          prenom: true
-        }
-      }
-    }
-  });
-
-  // Award loyalty points
-  try {
-    await loyaltyService.awardBookingPoints(req.user.id, booking.id, totalPrice);
-  } catch (error) {
-    console.error('Failed to award loyalty points:', error);
-    // Don't fail the booking if loyalty points fail
-  }
-
-  // Send confirmation email
-  try {
-    await sendBookingConfirmation(req.user.email, booking);
-  } catch (error) {
-    console.error('Failed to send booking confirmation:', error);
-    // Don't fail the booking if email fails
-  }
-
-  res.status(201).json({
-    success: true,
-    message: 'Réservation créée avec succès',
-    data: {
-      booking,
-      pricing_details: {
-        daily_price: car.prix_par_jour,
-        rental_days: rentalDays,
-        subtotal: car.prix_par_jour * rentalDays,
-        loyalty_discount: loyaltyDiscount,
-        total_price: totalPrice
-      }
-    }
-  });
-});
-
-// Get booking by ID
+/**
+ * GET /api/bookings/:bookingId
+ * Get detailed booking information
+ */
 const getBookingById = asyncHandler(async (req, res) => {
-  const { id } = req.params;
+  const { bookingId } = req.params;
+  const userId = req.user.id;
 
-  const booking = await prisma.booking.findFirst({
-    where: {
-      id: parseInt(id),
-      user_id: req.user.id // Ensure user can only see their own bookings
-    },
-    include: {
-      car: {
-        include: {
-          brand: true,
-          category: true,
-          images: true
-        }
-      },
-      status: true,
-      payments: true,
-      rentalContract: true,
-      additionalDrivers: true
-    }
-  });
-
-  if (!booking) {
-    throw new AppError('Réservation non trouvée', 404, 'BOOKING_NOT_FOUND');
-  }
+  const booking = await bookingService.getBookingDetails(parseInt(bookingId), userId);
 
   res.json({
     success: true,
@@ -243,154 +136,186 @@ const getBookingById = asyncHandler(async (req, res) => {
   });
 });
 
-// Cancel booking
-const cancelBooking = asyncHandler(async (req, res) => {
-  const { id } = req.params;
-  const { reason } = req.body;
+/**
+ * PUT /api/bookings/:bookingId
+ * Update booking (only if status is PENDING)
+ */
+const updateBooking = asyncHandler(async (req, res) => {
+  const { bookingId } = req.params;
+  const updates = req.body;
+  const userId = req.user.id;
 
-  const booking = await prisma.booking.findFirst({
-    where: {
-      id: parseInt(id),
-      user_id: req.user.id
-    },
-    include: {
-      status: true
-    }
-  });
-
-  if (!booking) {
-    throw new AppError('Réservation non trouvée', 404, 'BOOKING_NOT_FOUND');
-  }
-
-  // Check if booking can be cancelled
-  const nonCancellableStatuses = ['COMPLETED', 'CANCELLED', 'IN_PROGRESS'];
-  if (nonCancellableStatuses.includes(booking.status.name)) {
-    throw new AppError('Cette réservation ne peut pas être annulée', 400, 'BOOKING_NOT_CANCELLABLE');
-  }
-
-  // Check cancellation policy (e.g., 24 hours before start date)
-  const now = new Date();
-  const startDate = new Date(booking.date_debut);
-  const hoursUntilStart = (startDate - now) / (1000 * 60 * 60);
-
-  if (hoursUntilStart < 24) {
-    throw new AppError('Annulation impossible moins de 24h avant le début de la location', 400, 'LATE_CANCELLATION');
-  }
-
-  // Get cancelled status
-  const cancelledStatus = await prisma.bookingStatus.findFirst({
-    where: { name: 'CANCELLED' }
-  });
-
-  // Update booking status
-  const updatedBooking = await prisma.booking.update({
-    where: { id: parseInt(id) },
-    data: {
-      status_id: cancelledStatus.id
-    },
-    include: {
-      car: {
-        include: {
-          brand: true
-        }
-      },
-      status: true
-    }
-  });
-
-  // Refund loyalty points if any were used
-  try {
-    await loyaltyService.refundBookingPoints(req.user.id, booking.id);
-  } catch (error) {
-    console.error('Failed to refund loyalty points:', error);
-  }
+  const updatedBooking = await bookingService.updateBooking(parseInt(bookingId), updates, userId);
 
   res.json({
     success: true,
-    message: 'Réservation annulée avec succès',
+    message: 'Réservation mise à jour avec succès',
     data: { booking: updatedBooking }
   });
 });
 
-// Add additional driver
+/**
+ * DELETE /api/bookings/:bookingId
+ * Cancel booking
+ */
+const cancelBooking = asyncHandler(async (req, res) => {
+  const { bookingId } = req.params;
+  const { reason } = req.body;
+
+  const result = await bookingService.cancelBooking(parseInt(bookingId), reason || 'Annulation par le client');
+
+  res.json({
+    success: true,
+    message: 'Réservation annulée avec succès',
+    data: result
+  });
+});
+
+/**
+ * POST /api/bookings/:bookingId/start
+ * Start rental (customer picks up car)
+ */
+const startRental = asyncHandler(async (req, res) => {
+  const { bookingId } = req.params;
+  const contractData = req.body;
+
+  const result = await bookingService.startRental(parseInt(bookingId), contractData);
+
+  res.json({
+    success: true,
+    message: 'Location démarrée avec succès',
+    data: result
+  });
+});
+
+/**
+ * POST /api/bookings/:bookingId/complete
+ * Complete rental (customer returns car)
+ */
+const completeRental = asyncHandler(async (req, res) => {
+  const { bookingId } = req.params;
+  const returnData = req.body;
+
+  const result = await bookingService.completeRental(parseInt(bookingId), returnData);
+
+  res.json({
+    success: true,
+    message: 'Location terminée avec succès',
+    data: result
+  });
+});
+
+/**
+ * POST /api/bookings/:bookingId/additional-driver
+ * Add additional driver to booking
+ */
 const addAdditionalDriver = asyncHandler(async (req, res) => {
-  const { id } = req.params;
-  const { nom, prenom, permis_numero, permis_date } = req.body;
+  const { bookingId } = req.params;
+  const driverData = req.body;
+  const userId = req.user.id;
 
-  // Verify booking belongs to user
-  const booking = await prisma.booking.findFirst({
-    where: {
-      id: parseInt(id),
-      user_id: req.user.id
-    }
-  });
-
-  if (!booking) {
-    throw new AppError('Réservation non trouvée', 404, 'BOOKING_NOT_FOUND');
-  }
-
-  // Check if license is valid (at least 2 years old)
-  const licenseDate = new Date(permis_date);
-  const twoYearsAgo = new Date();
-  twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
-
-  if (licenseDate > twoYearsAgo) {
-    throw new AppError('Le permis de conduire doit être obtenu depuis au moins 2 ans', 400, 'INVALID_LICENSE_AGE');
-  }
-
-  // Check maximum additional drivers (usually 2)
-  const currentDriversCount = await prisma.additionalDriver.count({
-    where: { booking_id: parseInt(id) }
-  });
-
-  if (currentDriversCount >= 2) {
-    throw new AppError('Maximum 2 conducteurs additionnels autorisés', 400, 'MAX_DRIVERS_EXCEEDED');
-  }
-
-  const additionalDriver = await prisma.additionalDriver.create({
-    data: {
-      booking_id: parseInt(id),
-      user_id: req.user.id,
-      nom,
-      prenom,
-      permis_numero,
-      permis_date: new Date(permis_date)
-    }
-  });
+  const result = await bookingService.addAdditionalDriver(parseInt(bookingId), driverData, userId);
 
   res.status(201).json({
     success: true,
     message: 'Conducteur additionnel ajouté avec succès',
-    data: { additionalDriver }
+    data: result
   });
 });
 
-// Remove additional driver
+/**
+ * DELETE /api/bookings/:bookingId/additional-driver/:driverId
+ * Remove additional driver from booking
+ */
 const removeAdditionalDriver = asyncHandler(async (req, res) => {
-  const { id, driverId } = req.params;
+  const { bookingId, driverId } = req.params;
+  const userId = req.user.id;
 
-  // Verify booking belongs to user
-  const booking = await prisma.booking.findFirst({
-    where: {
-      id: parseInt(id),
-      user_id: req.user.id
-    }
-  });
-
-  if (!booking) {
-    throw new AppError('Réservation non trouvée', 404, 'BOOKING_NOT_FOUND');
-  }
-
-  await prisma.additionalDriver.delete({
-    where: {
-      id: parseInt(driverId),
-      booking_id: parseInt(id)
-    }
-  });
+  const result = await bookingService.removeAdditionalDriver(
+    parseInt(bookingId), 
+    parseInt(driverId), 
+    userId
+  );
 
   res.json({
     success: true,
-    message: 'Conducteur additionnel supprimé avec succès'
+    message: 'Conducteur additionnel supprimé avec succès',
+    data: result
+  });
+});
+
+/**
+ * GET /api/bookings/:bookingId/contract
+ * Get booking contract
+ */
+const getBookingContract = asyncHandler(async (req, res) => {
+  const { bookingId } = req.params;
+
+  // Get booking to verify ownership
+  const booking = await bookingService.getBookingDetails(parseInt(bookingId), req.user.id);
+  
+  if (!booking.rentalContract) {
+    return res.status(404).json({
+      success: false,
+      message: 'Contrat non trouvé pour cette réservation'
+    });
+  }
+
+  const contract = await contractService.getContract(booking.rentalContract.id);
+
+  res.json({
+    success: true,
+    data: { contract }
+  });
+});
+
+/**
+ * GET /api/bookings/:bookingId/invoice
+ * Get booking invoice
+ */
+const getBookingInvoice = asyncHandler(async (req, res) => {
+  const { bookingId } = req.params;
+
+  // Get booking to verify ownership
+  const booking = await bookingService.getBookingDetails(parseInt(bookingId), req.user.id);
+  
+  if (!booking.invoices || booking.invoices.length === 0) {
+    return res.status(404).json({
+      success: false,
+      message: 'Facture non trouvée pour cette réservation'
+    });
+  }
+
+  const invoice = await invoiceService.getInvoice(booking.invoices[0].id);
+
+  res.json({
+    success: true,
+    data: { invoice }
+  });
+});
+
+/**
+ * GET /api/cars/available
+ * Get available cars for specified dates
+ */
+const getAvailableCars = asyncHandler(async (req, res) => {
+  const filters = req.query;
+
+  if (!filters.date_debut || !filters.date_fin) {
+    return res.status(400).json({
+      success: false,
+      message: 'Dates de début et fin requises'
+    });
+  }
+
+  const availableCars = await availabilityService.getAvailableCars(filters);
+
+  res.json({
+    success: true,
+    data: {
+      cars: availableCars,
+      total: availableCars.length
+    }
   });
 });
 
@@ -638,14 +563,78 @@ const getBookingStatistics = asyncHandler(async (req, res) => {
   });
 });
 
+/**
+ * Error handling middleware for booking-specific errors
+ */
+const handleBookingErrors = (error, req, res, next) => {
+  if (error instanceof BookingNotFoundError) {
+    return res.status(404).json({
+      success: false,
+      message: error.message,
+      code: error.code
+    });
+  }
+  
+  if (error instanceof CarNotAvailableError) {
+    return res.status(400).json({
+      success: false,
+      message: error.message,
+      code: error.code,
+      data: {
+        carId: error.carId,
+        dateDebut: error.dateDebut,
+        dateFin: error.dateFin,
+        reason: error.reason
+      }
+    });
+  }
+  
+  if (error instanceof InvalidDriverLicenseError) {
+    return res.status(400).json({
+      success: false,
+      message: error.message,
+      code: error.code
+    });
+  }
+  
+  if (error instanceof InvalidBookingStatusError) {
+    return res.status(400).json({
+      success: false,
+      message: error.message,
+      code: error.code
+    });
+  }
+  
+  if (error instanceof BookingCancellationError) {
+    return res.status(400).json({
+      success: false,
+      message: error.message,
+      code: error.code
+    });
+  }
+  
+  // Pass other errors to the default error handler
+  next(error);
+};
+
+
 module.exports = {
-  getUserBookings,
+  checkAvailability,
+  calculatePrice,
   createBooking,
+  getUserBookings,
   getBookingById,
+  updateBooking,
   cancelBooking,
+  startRental,
+  completeRental,
   addAdditionalDriver,
   removeAdditionalDriver,
+  getBookingContract,
+  getBookingInvoice,
+  getAvailableCars,
   getAllBookings,
   updateBookingStatus,
-  getBookingStatistics
+  getBookingStatistics,
+  handleBookingErrors
 };

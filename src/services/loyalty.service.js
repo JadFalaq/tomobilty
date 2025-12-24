@@ -1,12 +1,119 @@
 const prisma = require('../config/prisma');
+const {
+  calculateTierMultiplier,
+  formatPoints,
+  calculatePointsToNextTier,
+  pointsToMoney,
+  moneyToPoints,
+  calculateBasePoints,
+  isValidPointsAmount,
+  calculateBonusPoints,
+  determineTierByPoints,
+  formatTransactionDescription,
+  calculateLoyaltyDiscount,
+  checkPointsExpiration,
+  validateRewardRedemption
+} = require('../utils/loyalty.utils');
 
-// Award points for booking
-const awardBookingPoints = async (userId, bookingId, bookingAmount) => {
+const {
+  InsufficientPointsError,
+  LoyaltyAccountNotFoundError,
+  InvalidRewardError,
+  ExpiredPointsError,
+  InvalidPointsAmountError,
+  TierUpgradeError
+} = require('../errors/loyalty.errors');
+
+/**
+ * Create loyalty account for new user
+ * @param {number} userId - User ID
+ * @returns {Object} Created loyalty account
+ */
+const createLoyaltyAccount = async (userId) => {
   try {
-    // Calculate points (1 point per 10 MAD spent)
-    const pointsToAward = Math.floor(bookingAmount / 10);
+    // Check if account already exists
+    const existingAccount = await prisma.loyaltyAccount.findUnique({
+      where: { user_id: userId }
+    });
+
+    if (existingAccount) {
+      return existingAccount;
+    }
+
+    // Create new loyalty account with Bronze tier (id: 1)
+    const loyaltyAccount = await prisma.loyaltyAccount.create({
+      data: {
+        user_id: userId,
+        tier_id: 1, // Bronze tier
+        points_balance: 0,
+        lifetime_points: 0,
+        total_spent: 0
+      },
+      include: {
+        tier: true,
+        user: true
+      }
+    });
+
+    console.log(`✅ Loyalty account created for user ${userId}`);
+    return loyaltyAccount;
+  } catch (error) {
+    console.error('Error creating loyalty account:', error);
+    throw error;
+  }
+};
+
+/**
+ * Calculate points earned from booking amount
+ * @param {number} bookingAmount - Booking amount in MAD
+ * @param {number} userId - User ID
+ * @returns {Object} Points calculation details
+ */
+const calculatePointsEarned = async (bookingAmount, userId) => {
+  try {
+    // Get user's loyalty account and tier
+    const loyaltyAccount = await prisma.loyaltyAccount.findUnique({
+      where: { user_id: userId },
+      include: { tier: true }
+    });
+
+    if (!loyaltyAccount) {
+      throw new LoyaltyAccountNotFoundError(userId);
+    }
+
+    // Calculate base points (1 point per 10 MAD)
+    const basePoints = moneyToPoints(bookingAmount);
     
-    if (pointsToAward <= 0) return;
+    // Apply tier multiplier
+    const tierMultiplier = calculateTierMultiplier(loyaltyAccount.tier.name);
+    const pointsWithMultiplier = Math.floor(basePoints * tierMultiplier);
+
+    return {
+      basePoints,
+      tierMultiplier,
+      pointsWithMultiplier,
+      tierName: loyaltyAccount.tier.name
+    };
+  } catch (error) {
+    console.error('Error calculating points earned:', error);
+    throw error;
+  }
+};
+
+/**
+ * Add points to user's loyalty account
+ * @param {number} userId - User ID
+ * @param {number} points - Points to add
+ * @param {number} bookingId - Associated booking ID (optional)
+ * @param {string} description - Transaction description
+ * @returns {Object} Updated account info
+ */
+const addPoints = async (userId, points, bookingId = null, description = 'Points ajoutés') => {
+  try {
+    // Validate points amount
+    if (!isValidPointsAmount(points)) {
+      throw new InvalidPointsAmountError(points);
+    }
 
     // Get or create loyalty account
     let loyaltyAccount = await prisma.loyaltyAccount.findUnique({
@@ -15,16 +122,7 @@ const awardBookingPoints = async (userId, bookingId, bookingAmount) => {
     });
 
     if (!loyaltyAccount) {
-      // Create loyalty account with default tier (Bronze)
-      loyaltyAccount = await prisma.loyaltyAccount.create({
-        data: {
-          user_id: userId,
-          tier_id: 1, // Bronze tier
-          points_balance: 0,
-          total_spent: 0
-        },
-        include: { tier: true }
-      });
+      loyaltyAccount = await createLoyaltyAccount(userId);
     }
 
     // Update loyalty account
@@ -32,102 +130,68 @@ const awardBookingPoints = async (userId, bookingId, bookingAmount) => {
       where: { user_id: userId },
       data: {
         points_balance: {
-          increment: pointsToAward
+          increment: points
         },
-        total_spent: {
-          increment: bookingAmount
+        lifetime_points: {
+          increment: points
         }
-      }
+      },
+      include: { tier: true }
     });
 
-    // Create loyalty transaction
+    // Create transaction record
     await prisma.loyaltyTransaction.create({
       data: {
         loyalty_account_id: loyaltyAccount.id,
-        points: pointsToAward,
+        points: points,
         transaction_type: 'EARNED',
-        description: `Points gagnés pour la réservation #${bookingId}`,
+        description: formatTransactionDescription('EARNED', { source: description }),
         booking_id: bookingId
       }
     });
 
     // Check for tier upgrade
-    await checkAndUpgradeTier(userId, updatedAccount.points_balance, updatedAccount.total_spent);
+    const upgradeResult = await checkTierUpgrade(userId);
+
+    console.log(`✅ Added ${points} points to user ${userId}. New balance: ${updatedAccount.points_balance}`);
 
     return {
-      points_awarded: pointsToAward,
-      new_balance: updatedAccount.points_balance + pointsToAward
+      points_added: points,
+      new_balance: updatedAccount.points_balance,
+      tier_upgrade: upgradeResult
     };
   } catch (error) {
-    console.error('Error awarding booking points:', error);
+    console.error('Error adding points:', error);
     throw error;
   }
 };
 
-// Check and upgrade tier if eligible
-const checkAndUpgradeTier = async (userId, currentPoints, totalSpent) => {
+/**
+ * Redeem points from user's account
+ * @param {number} userId - User ID
+ * @param {number} points - Points to redeem
+ * @param {string} description - Transaction description
+ * @returns {Object} Redemption result
+ */
+const redeemPoints = async (userId, points, description = 'Points échangés') => {
   try {
-    // Get all tiers ordered by min_points
-    const tiers = await prisma.loyaltyTier.findMany({
-      orderBy: { min_points: 'desc' }
-    });
-
-    // Find the highest tier the user qualifies for
-    const eligibleTier = tiers.find(tier => currentPoints >= tier.min_points);
-    
-    if (!eligibleTier) return;
-
-    // Get current loyalty account
-    const loyaltyAccount = await prisma.loyaltyAccount.findUnique({
-      where: { user_id: userId },
-      include: { tier: true }
-    });
-
-    // Check if upgrade is needed
-    if (loyaltyAccount.tier_id !== eligibleTier.id && eligibleTier.min_points > loyaltyAccount.tier.min_points) {
-      // Upgrade tier
-      await prisma.loyaltyAccount.update({
-        where: { user_id: userId },
-        data: { tier_id: eligibleTier.id }
-      });
-
-      // Create notification for tier upgrade
-      await prisma.notification.create({
-        data: {
-          user_id: userId,
-          title: 'Félicitations ! Nouveau niveau de fidélité',
-          message: `Vous avez été promu au niveau ${eligibleTier.name} ! Profitez de ${eligibleTier.discount_percent}% de réduction sur vos prochaines réservations.`,
-          type: 'SYSTEM'
-        }
-      });
-
-      return {
-        upgraded: true,
-        new_tier: eligibleTier,
-        old_tier: loyaltyAccount.tier
-      };
+    // Validate minimum redemption (100 points)
+    if (points < 100) {
+      throw new InvalidPointsAmountError(points);
     }
 
-    return { upgraded: false };
-  } catch (error) {
-    console.error('Error checking tier upgrade:', error);
-    throw error;
-  }
-};
-
-// Redeem points for discount
-const redeemPoints = async (userId, pointsToRedeem, description = 'Points utilisés') => {
-  try {
+    // Get loyalty account
     const loyaltyAccount = await prisma.loyaltyAccount.findUnique({
       where: { user_id: userId }
     });
 
     if (!loyaltyAccount) {
-      throw new Error('Compte de fidélité non trouvé');
+      throw new LoyaltyAccountNotFoundError(userId);
     }
 
-    if (loyaltyAccount.points_balance < pointsToRedeem) {
-      throw new Error('Solde de points insuffisant');
+    // Check sufficient points
+    if (loyaltyAccount.points_balance < points) {
+      throw new InsufficientPointsError(points, loyaltyAccount.points_balance);
     }
 
     // Update points balance
@@ -135,7 +199,7 @@ const redeemPoints = async (userId, pointsToRedeem, description = 'Points utilis
       where: { user_id: userId },
       data: {
         points_balance: {
-          decrement: pointsToRedeem
+          decrement: points
         }
       }
     });
@@ -144,14 +208,20 @@ const redeemPoints = async (userId, pointsToRedeem, description = 'Points utilis
     await prisma.loyaltyTransaction.create({
       data: {
         loyalty_account_id: loyaltyAccount.id,
-        points: -pointsToRedeem,
+        points: -points,
         transaction_type: 'REDEEMED',
-        description
+        description: formatTransactionDescription('REDEEMED', { reason: description })
       }
     });
 
+    // Calculate discount amount (100 points = 10 MAD)
+    const discountAmount = pointsToMoney(points);
+
+    console.log(`✅ Redeemed ${points} points for user ${userId}. Discount: ${discountAmount} MAD`);
+
     return {
-      points_redeemed: pointsToRedeem,
+      points_redeemed: points,
+      discount_amount: discountAmount,
       new_balance: updatedAccount.points_balance
     };
   } catch (error) {
@@ -160,91 +230,137 @@ const redeemPoints = async (userId, pointsToRedeem, description = 'Points utilis
   }
 };
 
-// Refund points for cancelled booking
-const refundBookingPoints = async (userId, bookingId) => {
+/**
+ * Check and upgrade tier if eligible
+ * @param {number} userId - User ID
+ * @returns {Object} Upgrade result
+ */
+const checkTierUpgrade = async (userId) => {
   try {
-    // Find the original transaction
-    const originalTransaction = await prisma.loyaltyTransaction.findFirst({
-      where: {
-        booking_id: bookingId,
-        transaction_type: 'EARNED'
-      },
-      include: {
-        loyaltyAccount: true
-      }
+    // Get current loyalty account
+    const loyaltyAccount = await prisma.loyaltyAccount.findUnique({
+      where: { user_id: userId },
+      include: { tier: true }
     });
 
-    if (!originalTransaction || originalTransaction.loyaltyAccount.user_id !== userId) {
-      return; // No points to refund or wrong user
+    if (!loyaltyAccount) {
+      throw new LoyaltyAccountNotFoundError(userId);
     }
 
-    const pointsToRefund = originalTransaction.points;
+    // Get all tiers
+    const tiers = await prisma.loyaltyTier.findMany({
+      orderBy: { min_points: 'asc' }
+    });
 
-    // Update loyalty account
-    await prisma.loyaltyAccount.update({
-      where: { user_id: userId },
-      data: {
-        points_balance: {
-          decrement: pointsToRefund
+    // Determine new tier based on lifetime points
+    const newTier = determineTierByPoints(loyaltyAccount.lifetime_points, tiers);
+
+    // Check if upgrade is needed
+    if (newTier.id !== loyaltyAccount.tier_id && newTier.min_points > loyaltyAccount.tier.min_points) {
+      // Update tier
+      await prisma.loyaltyAccount.update({
+        where: { user_id: userId },
+        data: { tier_id: newTier.id }
+      });
+
+      // Add bonus points for tier upgrade
+      const bonusPoints = 100; // Bonus for tier upgrade
+      await prisma.loyaltyTransaction.create({
+        data: {
+          loyalty_account_id: loyaltyAccount.id,
+          points: bonusPoints,
+          transaction_type: 'BONUS',
+          description: formatTransactionDescription('BONUS', { reason: `Upgrade vers ${newTier.name}` })
         }
-      }
-    });
+      });
 
-    // Create refund transaction
-    await prisma.loyaltyTransaction.create({
-      data: {
-        loyalty_account_id: originalTransaction.loyalty_account_id,
-        points: -pointsToRefund,
-        transaction_type: 'REDEEMED',
-        description: `Remboursement pour annulation de réservation #${bookingId}`,
-        booking_id: bookingId
-      }
-    });
+      // Update points balance with bonus
+      await prisma.loyaltyAccount.update({
+        where: { user_id: userId },
+        data: {
+          points_balance: { increment: bonusPoints }
+        }
+      });
 
-    return {
-      points_refunded: pointsToRefund
-    };
+      // Send notification
+      try {
+        await prisma.notification.create({
+          data: {
+            user_id: userId,
+            title: 'Félicitations ! Nouveau niveau de fidélité',
+            message: `Vous avez été promu au niveau ${newTier.name} ! Profitez de ${newTier.discount_percent}% de réduction + ${bonusPoints} points bonus.`,
+            type: 'SYSTEM'
+          }
+        });
+      } catch (notifError) {
+        console.warn('Could not create notification:', notifError.message);
+      }
+
+      console.log(`🎉 User ${userId} upgraded from ${loyaltyAccount.tier.name} to ${newTier.name}`);
+
+      return {
+        upgraded: true,
+        old_tier: loyaltyAccount.tier,
+        new_tier: newTier,
+        bonus_points: bonusPoints
+      };
+    }
+
+    return { upgraded: false };
   } catch (error) {
-    console.error('Error refunding booking points:', error);
-    throw error;
+    console.error('Error checking tier upgrade:', error);
+    throw new TierUpgradeError(error.message);
   }
 };
 
-// Calculate discount amount based on tier
-const calculateTierDiscount = async (userId, bookingAmount) => {
+/**
+ * Calculate discount amount based on user's tier
+ * @param {number} userId - User ID
+ * @param {number} bookingAmount - Booking amount in MAD
+ * @returns {number} Discount amount
+ */
+const calculateDiscount = async (userId, bookingAmount) => {
   try {
     const loyaltyAccount = await prisma.loyaltyAccount.findUnique({
       where: { user_id: userId },
       include: { tier: true }
     });
 
-    if (!loyaltyAccount || !loyaltyAccount.tier.discount_percent) {
+    if (!loyaltyAccount) {
       return 0;
     }
 
-    return (bookingAmount * loyaltyAccount.tier.discount_percent) / 100;
+    const discountPercent = calculateLoyaltyDiscount(loyaltyAccount.tier);
+    return (bookingAmount * discountPercent) / 100;
   } catch (error) {
-    console.error('Error calculating tier discount:', error);
+    console.error('Error calculating discount:', error);
     return 0;
   }
 };
 
-// Get loyalty account with full details
-const getLoyaltyAccount = async (userId) => {
+/**
+ * Get complete user loyalty information
+ * @param {number} userId - User ID
+ * @returns {Object} Complete loyalty info
+ */
+const getUserLoyaltyInfo = async (userId) => {
   try {
-    const loyaltyAccount = await prisma.loyaltyAccount.findUnique({
+    // Get or create loyalty account
+    let loyaltyAccount = await prisma.loyaltyAccount.findUnique({
       where: { user_id: userId },
       include: {
         tier: true,
         transactions: {
           orderBy: { created_at: 'desc' },
-          take: 10,
+          take: 20,
           include: {
             booking: {
-              include: {
+              select: {
+                id: true,
                 car: {
-                  include: {
-                    brand: true
+                  select: {
+                    modele: true,
+                    brand: { select: { name: true } }
                   }
                 }
               }
@@ -255,29 +371,44 @@ const getLoyaltyAccount = async (userId) => {
     });
 
     if (!loyaltyAccount) {
-      // Create default loyalty account
-      return await prisma.loyaltyAccount.create({
-        data: {
-          user_id: userId,
-          tier_id: 1, // Bronze tier
-          points_balance: 0,
-          total_spent: 0
-        },
-        include: {
-          tier: true,
-          transactions: true
-        }
-      });
+      loyaltyAccount = await createLoyaltyAccount(userId);
     }
 
-    return loyaltyAccount;
+    // Get all tiers for next tier calculation
+    const tiers = await prisma.loyaltyTier.findMany({
+      orderBy: { min_points: 'asc' }
+    });
+
+    // Calculate points to next tier
+    const nextTier = tiers.find(tier => tier.min_points > loyaltyAccount.lifetime_points);
+    const nextTierInfo = nextTier ? {
+      next_tier: nextTier,
+      points_needed: nextTier.min_points - loyaltyAccount.lifetime_points,
+      progress_percentage: Math.min((loyaltyAccount.lifetime_points / nextTier.min_points) * 100, 100)
+    } : null;
+
+    // Get available rewards
+    const availableRewards = await getAvailableRewards(userId);
+
+    return {
+      account: loyaltyAccount,
+      tier: loyaltyAccount.tier,
+      next_tier: nextTierInfo,
+      available_rewards: availableRewards,
+      transactions: loyaltyAccount.transactions,
+      formatted_balance: loyaltyAccount.points_balance.toLocaleString()
+    };
   } catch (error) {
-    console.error('Error getting loyalty account:', error);
+    console.error('Error getting user loyalty info:', error);
     throw error;
   }
 };
 
-// Get available rewards
+/**
+ * Get available rewards for user
+ * @param {number} userId - User ID
+ * @returns {Array} Available rewards
+ */
 const getAvailableRewards = async (userId) => {
   try {
     const loyaltyAccount = await prisma.loyaltyAccount.findUnique({
@@ -288,61 +419,86 @@ const getAvailableRewards = async (userId) => {
       return [];
     }
 
-    // Get rewards user can afford
-    const rewards = await prisma.loyaltyReward.findMany({
-      where: {
-        is_active: true,
-        points_cost: {
-          lte: loyaltyAccount.points_balance
-        }
-      },
-      orderBy: {
-        points_cost: 'asc'
-      }
+    // Get all active rewards
+    const allRewards = await prisma.loyaltyReward.findMany({
+      where: { is_active: true },
+      orderBy: { points_cost: 'asc' }
     });
 
-    return rewards;
+    // Add affordability info to each reward
+    return allRewards.map(reward => ({
+      ...reward,
+      can_afford: loyaltyAccount.points_balance >= reward.points_cost,
+      points_needed: Math.max(0, reward.points_cost - loyaltyAccount.points_balance)
+    }));
   } catch (error) {
     console.error('Error getting available rewards:', error);
     throw error;
   }
 };
 
-// Redeem a specific reward
+/**
+ * Redeem a specific reward
+ * @param {number} userId - User ID
+ * @param {number} rewardId - Reward ID
+ * @returns {Object} Redemption result
+ */
 const redeemReward = async (userId, rewardId) => {
   try {
+    // Get reward details
     const reward = await prisma.loyaltyReward.findUnique({
       where: { id: rewardId }
     });
 
     if (!reward || !reward.is_active) {
-      throw new Error('Récompense non disponible');
+      throw new InvalidRewardError(rewardId);
     }
 
+    // Get loyalty account
     const loyaltyAccount = await prisma.loyaltyAccount.findUnique({
       where: { user_id: userId }
     });
 
-    if (!loyaltyAccount || loyaltyAccount.points_balance < reward.points_cost) {
-      throw new Error('Points insuffisants pour cette récompense');
+    if (!loyaltyAccount) {
+      throw new LoyaltyAccountNotFoundError(userId);
+    }
+
+    // Validate redemption
+    const validation = validateRewardRedemption(reward, loyaltyAccount.points_balance);
+    if (!validation.isValid) {
+      if (!validation.canAfford) {
+        throw new InsufficientPointsError(reward.points_cost, loyaltyAccount.points_balance);
+      }
+      throw new InvalidRewardError(rewardId);
     }
 
     // Redeem points
-    await redeemPoints(userId, reward.points_cost, `Échange contre: ${reward.name}`);
+    const redemptionResult = await redeemPoints(
+      userId,
+      reward.points_cost,
+      `Échange récompense: ${reward.name}`
+    );
 
-    // Create notification
-    await prisma.notification.create({
-      data: {
-        user_id: userId,
-        title: 'Récompense échangée !',
-        message: `Vous avez échangé ${reward.points_cost} points contre: ${reward.name}`,
-        type: 'SYSTEM'
-      }
-    });
+    // Send notification
+    try {
+      await prisma.notification.create({
+        data: {
+          user_id: userId,
+          title: 'Récompense échangée !',
+          message: `Vous avez échangé ${reward.points_cost} points contre: ${reward.name}`,
+          type: 'SYSTEM'
+        }
+      });
+    } catch (notifError) {
+      console.warn('Could not create notification:', notifError.message);
+    }
+
+    console.log(`🎁 User ${userId} redeemed reward: ${reward.name}`);
 
     return {
       reward,
-      points_used: reward.points_cost
+      points_used: reward.points_cost,
+      new_balance: redemptionResult.new_balance
     };
   } catch (error) {
     console.error('Error redeeming reward:', error);
@@ -350,7 +506,275 @@ const redeemReward = async (userId, rewardId) => {
   }
 };
 
-// Initialize default tiers if they don't exist
+/**
+ * Expire inactive points (12+ months)
+ * @param {number} userId - User ID
+ * @returns {Object} Expiration result
+ */
+const expireInactivePoints = async (userId) => {
+  try {
+    const loyaltyAccount = await prisma.loyaltyAccount.findUnique({
+      where: { user_id: userId },
+      include: {
+        transactions: {
+          where: { transaction_type: 'EARNED' },
+          orderBy: { created_at: 'desc' },
+          take: 1
+        }
+      }
+    });
+
+    if (!loyaltyAccount || loyaltyAccount.transactions.length === 0) {
+      return { points_expired: 0 };
+    }
+
+    const lastActivity = loyaltyAccount.transactions[0].created_at;
+    const expirationInfo = checkPointsExpiration(lastActivity);
+
+    if (expirationInfo.isExpired && loyaltyAccount.points_balance > 0) {
+      const pointsToExpire = loyaltyAccount.points_balance;
+
+      // Update account
+      await prisma.loyaltyAccount.update({
+        where: { user_id: userId },
+        data: { points_balance: 0 }
+      });
+
+      // Create expiration transaction
+      await prisma.loyaltyTransaction.create({
+        data: {
+          loyalty_account_id: loyaltyAccount.id,
+          points: -pointsToExpire,
+          transaction_type: 'EXPIRED',
+          description: formatTransactionDescription('EXPIRED')
+        }
+      });
+
+      // Send notification
+      try {
+        await prisma.notification.create({
+          data: {
+            user_id: userId,
+            title: 'Points expirés',
+            message: `${pointsToExpire} points ont expiré par inactivité de 12 mois.`,
+            type: 'SYSTEM'
+          }
+        });
+      } catch (notifError) {
+        console.warn('Could not create notification:', notifError.message);
+      }
+
+      console.log(`⏰ Expired ${pointsToExpire} points for user ${userId}`);
+      return { points_expired: pointsToExpire };
+    }
+
+    return { points_expired: 0 };
+  } catch (error) {
+    console.error('Error expiring inactive points:', error);
+    throw error;
+  }
+};
+
+/**
+ * Refund points for cancelled booking
+ * @param {number} bookingId - Booking ID
+ * @returns {Object} Refund result
+ */
+const refundPoints = async (bookingId) => {
+  try {
+    // Find the original earned transaction
+    const originalTransaction = await prisma.loyaltyTransaction.findFirst({
+      where: {
+        booking_id: bookingId,
+        transaction_type: 'EARNED'
+      },
+      include: {
+        loyaltyAccount: true
+      }
+    });
+
+    if (!originalTransaction) {
+      return { points_refunded: 0 };
+    }
+
+    const pointsToRefund = originalTransaction.points;
+    const userId = originalTransaction.loyaltyAccount.user_id;
+
+    // Update loyalty account (remove points)
+    await prisma.loyaltyAccount.update({
+      where: { user_id: userId },
+      data: {
+        points_balance: {
+          decrement: pointsToRefund
+        },
+        lifetime_points: {
+          decrement: pointsToRefund
+        }
+      }
+    });
+
+    // Create refund transaction
+    await prisma.loyaltyTransaction.create({
+      data: {
+        loyalty_account_id: originalTransaction.loyalty_account_id,
+        points: -pointsToRefund,
+        transaction_type: 'REFUNDED',
+        description: formatTransactionDescription('REFUNDED', { reason: `Annulation réservation #${bookingId}` }),
+        booking_id: bookingId
+      }
+    });
+
+    // Send notification
+    try {
+      await prisma.notification.create({
+        data: {
+          user_id: userId,
+          title: 'Points remboursés',
+          message: `${pointsToRefund} points ont été remboursés suite à l'annulation de votre réservation.`,
+          type: 'SYSTEM'
+        }
+      });
+    } catch (notifError) {
+      console.warn('Could not create notification:', notifError.message);
+    }
+
+    console.log(`💰 Refunded ${pointsToRefund} points for booking ${bookingId}`);
+
+    return {
+      points_refunded: pointsToRefund,
+      user_id: userId
+    };
+  } catch (error) {
+    console.error('Error refunding points:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get transaction history for user
+ * @param {number} userId - User ID
+ * @param {number} limit - Number of transactions to return
+ * @returns {Array} Transaction history
+ */
+const getTransactionHistory = async (userId, limit = 20) => {
+  try {
+    const loyaltyAccount = await prisma.loyaltyAccount.findUnique({
+      where: { user_id: userId }
+    });
+
+    if (!loyaltyAccount) {
+      return [];
+    }
+
+    const transactions = await prisma.loyaltyTransaction.findMany({
+      where: { loyalty_account_id: loyaltyAccount.id },
+      orderBy: { created_at: 'desc' },
+      take: limit,
+      include: {
+        booking: {
+          select: {
+            id: true,
+            car: {
+              select: {
+                modele: true,
+                brand: { select: { name: true } }
+              }
+            }
+          }
+        }
+      }
+    });
+
+    return transactions.map(transaction => ({
+      ...transaction,
+      formatted_points: formatPoints(Math.abs(transaction.points)),
+      is_positive: transaction.points > 0
+    }));
+  } catch (error) {
+    console.error('Error getting transaction history:', error);
+    throw error;
+  }
+};
+
+/**
+ * Award points for completed booking with bonuses
+ * @param {number} userId - User ID
+ * @param {number} bookingId - Booking ID
+ * @param {number} bookingAmount - Booking amount in MAD
+ * @param {Object} bookingDetails - Booking details for bonus calculation
+ * @returns {Object} Points awarded result
+ */
+const awardBookingPoints = async (userId, bookingId, bookingAmount, bookingDetails = {}) => {
+  try {
+    // Calculate base points with tier multiplier
+    const pointsCalculation = await calculatePointsEarned(bookingAmount, userId);
+    let totalPoints = pointsCalculation.pointsWithMultiplier;
+
+    // Check if this is user's first booking
+    const bookingCount = await prisma.booking.count({
+      where: { user_id: userId, status: 'COMPLETED' }
+    });
+    const isFirstBooking = bookingCount === 0;
+
+    // Calculate bonus points
+    const bonusPoints = calculateBonusPoints({
+      duration_days: bookingDetails.duration_days || 1,
+      ...bookingDetails
+    }, isFirstBooking);
+
+    totalPoints += bonusPoints;
+
+    // Add points to account
+    const result = await addPoints(
+      userId,
+      totalPoints,
+      bookingId,
+      `Réservation #${bookingId} (${bookingAmount} MAD)`
+    );
+
+    // Update total spent
+    await prisma.loyaltyAccount.update({
+      where: { user_id: userId },
+      data: {
+        total_spent: { increment: bookingAmount }
+      }
+    });
+
+    console.log(`🎯 Awarded ${totalPoints} points to user ${userId} for booking ${bookingId}`);
+
+    return {
+      ...result,
+      base_points: pointsCalculation.pointsWithMultiplier,
+      bonus_points: bonusPoints,
+      total_points: totalPoints,
+      is_first_booking: isFirstBooking
+    };
+  } catch (error) {
+    console.error('Error awarding booking points:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get all loyalty tiers
+ * @returns {Array} All loyalty tiers
+ */
+const getAllTiers = async () => {
+  try {
+    return await prisma.loyaltyTier.findMany({
+      orderBy: { min_points: 'asc' }
+    });
+  } catch (error) {
+    console.error('Error getting all tiers:', error);
+    throw error;
+  }
+};
+
+
+/**
+ * Initialize default loyalty tiers
+ * @returns {Promise<void>}
+ */
 const initializeDefaultTiers = async () => {
   try {
     const existingTiers = await prisma.loyaltyTier.count();
@@ -361,36 +785,48 @@ const initializeDefaultTiers = async () => {
           {
             name: 'Bronze',
             min_points: 0,
-            discount_percent: 0,
-            benefits: 'Accès aux offres de base'
+            max_points: 999,
+            discount_percent: 5,
+            points_multiplier: 1.0,
+            benefits: 'Niveau de base - 5% de réduction'
           },
           {
             name: 'Argent',
-            min_points: 500,
-            discount_percent: 5,
-            benefits: '5% de réduction sur toutes les réservations'
+            min_points: 1000,
+            max_points: 2999,
+            discount_percent: 10,
+            points_multiplier: 1.5,
+            benefits: '10% de réduction + multiplicateur x1.5'
           },
           {
             name: 'Or',
-            min_points: 1500,
-            discount_percent: 10,
-            benefits: '10% de réduction + priorité sur les réservations'
+            min_points: 3000,
+            max_points: 6999,
+            discount_percent: 15,
+            points_multiplier: 2.0,
+            benefits: '15% de réduction + multiplicateur x2 + priorité'
           },
           {
             name: 'Platine',
-            min_points: 3000,
-            discount_percent: 15,
-            benefits: '15% de réduction + surclassements gratuits + support prioritaire'
+            min_points: 7000,
+            max_points: null,
+            discount_percent: 20,
+            points_multiplier: 3.0,
+            benefits: '20% de réduction + multiplicateur x3 + surclassements gratuits + support VIP'
           }
         ]
       });
+      console.log('✅ Default loyalty tiers initialized');
     }
   } catch (error) {
     console.error('Error initializing default tiers:', error);
   }
 };
 
-// Initialize default rewards
+/**
+ * Initialize default loyalty rewards
+ * @returns {Promise<void>}
+ */
 const initializeDefaultRewards = async () => {
   try {
     const existingRewards = await prisma.loyaltyReward.count();
@@ -399,91 +835,74 @@ const initializeDefaultRewards = async () => {
       await prisma.loyaltyReward.createMany({
         data: [
           {
+            name: 'Réduction 10 MAD',
+            description: 'Réduction de 10 MAD sur votre prochaine réservation',
+            points_cost: 100,
+            reward_type: 'DISCOUNT',
+            reward_value: 10
+          },
+          {
+            name: 'Réduction 25 MAD',
+            description: 'Réduction de 25 MAD sur votre prochaine réservation',
+            points_cost: 250,
+            reward_type: 'DISCOUNT',
+            reward_value: 25
+          },
+          {
             name: 'Réduction 50 MAD',
             description: 'Réduction de 50 MAD sur votre prochaine réservation',
-            points_cost: 100,
+            points_cost: 500,
             reward_type: 'DISCOUNT',
             reward_value: 50
           },
           {
-            name: 'Réduction 100 MAD',
-            description: 'Réduction de 100 MAD sur votre prochaine réservation',
-            points_cost: 200,
-            reward_type: 'DISCOUNT',
-            reward_value: 100
-          },
-          {
             name: 'Surclassement gratuit',
             description: 'Surclassement gratuit vers une catégorie supérieure',
-            points_cost: 300,
+            points_cost: 750,
             reward_type: 'UPGRADE',
+            reward_value: 0
+          },
+          {
+            name: 'Assurance gratuite',
+            description: 'Assurance tous risques gratuite pour votre prochaine location',
+            points_cost: 1000,
+            reward_type: 'INSURANCE',
             reward_value: 0
           },
           {
             name: 'Location gratuite 1 jour',
             description: 'Une journée de location gratuite (valeur max 300 MAD)',
-            points_cost: 500,
+            points_cost: 3000,
             reward_type: 'FREE_RENTAL',
             reward_value: 300
           }
         ]
       });
+      console.log('✅ Default loyalty rewards initialized');
     }
   } catch (error) {
     console.error('Error initializing default rewards:', error);
   }
 };
 
-// Initialize default booking statuses
-const initializeDefaultBookingStatuses = async () => {
-  try {
-    const existingStatuses = await prisma.bookingStatus.count();
-    
-    if (existingStatuses === 0) {
-      await prisma.bookingStatus.createMany({
-        data: [
-          {
-            name: 'PENDING',
-            description: 'En attente de confirmation'
-          },
-          {
-            name: 'CONFIRMED',
-            description: 'Réservation confirmée'
-          },
-          {
-            name: 'IN_PROGRESS',
-            description: 'Location en cours'
-          },
-          {
-            name: 'COMPLETED',
-            description: 'Location terminée'
-          },
-          {
-            name: 'CANCELLED',
-            description: 'Réservation annulée'
-          },
-          {
-            name: 'REJECTED',
-            description: 'Réservation rejetée'
-          }
-        ]
-      });
-    }
-  } catch (error) {
-    console.error('Error initializing default booking statuses:', error);
-  }
-};
-
 module.exports = {
-  awardBookingPoints,
-  checkAndUpgradeTier,
+  // Core functions
+  createLoyaltyAccount,
+  calculatePointsEarned,
+  addPoints,
   redeemPoints,
-  refundBookingPoints,
-  calculateTierDiscount,
-  getLoyaltyAccount,
+  checkTierUpgrade,
+  calculateDiscount,
+  getUserLoyaltyInfo,
   getAvailableRewards,
   redeemReward,
+  expireInactivePoints,
+  refundPoints,
+  getTransactionHistory,
+  awardBookingPoints,
+  getAllTiers,
+  
+  // Initialization functions
   initializeDefaultTiers,
-  initializeDefaultRewards,
-  initializeDefaultBookingStatuses
+  initializeDefaultRewards
 };

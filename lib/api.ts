@@ -71,6 +71,15 @@ export const reservationsAPI = {
 
 // API Paiements
 export const paymentsAPI = {
+  // Nouvelle API multi-provider
+  createPaymentSession: (data: any) => api.post('/payments/create', data),
+  getPaymentById: (id: string) => api.get(`/payments/${id}`),
+  getPaymentsByBooking: (bookingId: string) => api.get(`/payments/booking/${bookingId}`),
+  cancelPayment: (id: string) => api.post(`/payments/${id}/cancel`),
+  createRefund: (id: string, data: any) => api.post(`/payments/${id}/refund`, data),
+  getProvidersInfo: () => api.get('/payments/providers/info'),
+  
+  // Legacy support (à supprimer plus tard)
   createCheckoutSession: (data: any) => api.post('/payments/create-session', data),
 };
 
