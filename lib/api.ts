@@ -53,6 +53,23 @@ export const voituresAPI = {
   obtenirVoitures: (params?: any) => api.get('/cars', { params }),
   obtenirVoitureParId: (id: string) => api.get(`/cars/${id}`),
   verifierDisponibilite: (id: string, data: any) => api.get(`/cars/${id}/availability`, { params: data }),
+  obtenirVoituresDisponibles: async (params?: any) => {
+    const path = '/cars/available';
+    const fullUrl = `${API_URL}${path}?${new URLSearchParams(params || {}).toString()}`;
+    console.log('[AVAILABLE CARS] Request:', params);
+    console.log('[AVAILABLE CARS] URL:', fullUrl);
+    try {
+      const res = await api.get(path, { params });
+      return res;
+    } catch (error: any) {
+      console.error('[AVAILABLE CARS] Error status:', error?.response?.status);
+      console.error('[AVAILABLE CARS] Error body:', error?.response?.data);
+      console.error('[AVAILABLE CARS] Error details:', error?.response?.data?.errors);
+      console.error('[AVAILABLE CARS] Error message:', error?.message);
+      console.error('[AVAILABLE CARS] Error url:', error?.config?.url);
+      throw error;
+    }
+  },
   creerVoiture: (data: any) => api.post('/cars', data),
   mettreAJourVoiture: (id: string, data: any) => api.put(`/cars/${id}`, data),
   supprimerVoiture: (id: string) => api.delete(`/cars/${id}`),
@@ -71,7 +88,20 @@ export const reservationsAPI = {
 
 // API Paiements
 export const paymentsAPI = {
+  // Nouvelle API multi-provider
+  createPaymentSession: (data: any) => api.post('/payments/create', data),
+  getPaymentById: (id: string) => api.get(`/payments/${id}`),
+  getPaymentsByBooking: (bookingId: string) => api.get(`/payments/booking/${bookingId}`),
+  cancelPayment: (id: string) => api.post(`/payments/${id}/cancel`),
+  createRefund: (id: string, data: any) => api.post(`/payments/${id}/refund`, data),
+  getProvidersInfo: () => api.get('/payments/providers/info'),
+  
+  // Legacy support (à supprimer plus tard)
   createCheckoutSession: (data: any) => api.post('/payments/create-session', data),
 };
 
+// API Protections
+export const protectionsAPI = {
+  getAll: () => api.get('/protections'),
+};
 export default api;

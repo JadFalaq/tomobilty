@@ -7,6 +7,7 @@ import Footer from '@/components/Footer';
 import AnimatedIntro from '@/components/AnimatedIntro';
 import { Car, Shield, Clock, MapPin, Search, Star, ArrowRight, CheckCircle, Mail, ChevronRight, Quote } from 'lucide-react';
 import { voituresAPI } from '@/lib/api';
+import { useRouter } from 'next/navigation';
 
 export default function Home() {
   // Vérifier immédiatement si l'intro a été vue (côté client uniquement)
@@ -75,10 +76,87 @@ export default function Home() {
     setShowIntro(false);
   };
 
+  function clampToBusinessHours(d: Date, openHour: number, closeHour: number) {
+    const nd = new Date(d);
+    const h = nd.getHours();
+    const m = nd.getMinutes();
+    if (h < openHour) {
+      nd.setHours(openHour, 0, 0, 0);
+    } else if (h > closeHour || (h === closeHour && m > 0)) {
+      nd.setHours(closeHour, 0, 0, 0);
+    }
+    return nd;
+  }
+
+  function isOutsideBusinessHours(d: Date, openHour: number, closeHour: number) {
+    const h = d.getHours();
+    const m = d.getMinutes();
+    if (h < openHour) return true;
+    if (h > closeHour) return true;
+    if (h === closeHour && m > 0) return true;
+    return false;
+  }
+
   const handleNewsletterSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     alert(`Merci de votre inscription avec ${email} !`);
     setEmail('');
+  };
+  
+  const router = useRouter();
+  const LOCATIONS = [
+    'Casablanca (Ville)',
+    'Casablanca – Aéroport Mohammed V (CMN)',
+    'Rabat (Ville)',
+    'Rabat – Aéroport Rabat-Salé (RBA)'
+  ];
+  const [search, setSearch] = useState({
+    pickup: '',
+    returnLoc: '',
+    start: '',
+    end: ''
+  });
+  const MIN_DURATION_HOURS = 1;
+  const OPEN_HOUR = 9;
+  const CLOSE_HOUR = 17;
+  const STEP_MINUTES = 30;
+  const [timeError, setTimeError] = useState<string | null>(null);
+  const toInputDateTimeString = (d: Date) => {
+    const p = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+  };
+  const minEndString = (() => {
+    if (!search.start) return '';
+    const minEnd = new Date(new Date(search.start).getTime() + MIN_DURATION_HOURS * 60 * 60 * 1000);
+    return toInputDateTimeString(minEnd);
+  })();
+  const intervalInvalid = (() => {
+    if (!search.start || !search.end) return false;
+    const startDate = new Date(search.start);
+    const minEnd = new Date(startDate.getTime() + MIN_DURATION_HOURS * 60 * 60 * 1000);
+    const endDate = new Date(search.end);
+    return endDate <= minEnd;
+  })();
+  const submitSearch = () => {
+    if (!search.pickup || !search.start || !search.end || intervalInvalid) {
+      alert('Veuillez remplir les champs requis.');
+      return;
+    }
+    const sd = new Date(search.start);
+    const ed = new Date(search.end);
+    if (isOutsideBusinessHours(sd, OPEN_HOUR, CLOSE_HOUR) || isOutsideBusinessHours(ed, OPEN_HOUR, CLOSE_HOUR)) {
+      alert('Les réservations sont possibles uniquement entre 09:00 et 17:00.');
+      return;
+    }
+    if (ed <= sd) {
+      alert('La date de retour doit être après la date de départ.');
+      return;
+    }
+    const params = new URLSearchParams({
+      start_date: new Date(search.start).toISOString(),
+      end_date: new Date(search.end).toISOString()
+    }).toString();
+    router.push(`/voitures/disponibles?${params}`);
   };
 
   const FEATURED_CARS = [
@@ -171,6 +249,115 @@ export default function Home() {
               Nous contacter
             </Link>
           </div>
+          
+          <div className="mt-10 bg-white/90 rounded-2xl p-4 sm:p-6 shadow-lg max-w-3xl mx-auto">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm text-primary-700 mb-1 block">Lieu de retrait</label>
+                <select
+                  value={search.pickup}
+                  onChange={(e) => setSearch(s => ({ ...s, pickup: e.target.value }))}
+                  className="w-full p-3 rounded-lg border border-primary-200 text-black"
+                >
+                  <option value="">Sélectionner</option>
+                  {LOCATIONS.map(l => <option key={l} value={l}>{l}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-sm text-primary-700 mb-1 block">Lieu de retour</label>
+                <select
+                  value={search.returnLoc}
+                  onChange={(e) => setSearch(s => ({ ...s, returnLoc: e.target.value }))}
+                  className="w-full p-3 rounded-lg border border-primary-200 text-black"
+                >
+                  <option value="">Identique au retrait</option>
+                  {LOCATIONS.map(l => <option key={l} value={l}>{l}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-sm text-primary-700 mb-1 block">Date de départ</label>
+                <input
+                  type="datetime-local"
+                  value={search.start}
+                  step={STEP_MINUTES * 60}
+                  onChange={(e) => {
+                    setTimeError(null);
+                    let val = e.target.value;
+                    const raw = new Date(val);
+                    if (!isNaN(raw.getTime())) {
+                      const clampedStart = clampToBusinessHours(raw, OPEN_HOUR, CLOSE_HOUR);
+                      val = toInputDateTimeString(clampedStart);
+                      const minEndRaw = new Date(clampedStart.getTime() + MIN_DURATION_HOURS * 60 * 60 * 1000);
+                      let minEnd = clampToBusinessHours(minEndRaw, OPEN_HOUR, CLOSE_HOUR);
+                      if (minEnd <= clampedStart) {
+                        const nextDay = new Date(clampedStart);
+                        nextDay.setDate(nextDay.getDate() + 1);
+                        nextDay.setHours(OPEN_HOUR, 0, 0, 0);
+                        minEnd = nextDay;
+                      }
+                      const adjustedEnd = (!search.end || new Date(search.end) <= minEnd)
+                        ? toInputDateTimeString(minEnd)
+                        : toInputDateTimeString(clampToBusinessHours(new Date(search.end), OPEN_HOUR, CLOSE_HOUR));
+                      const invalidHour = isOutsideBusinessHours(clampedStart, OPEN_HOUR, CLOSE_HOUR);
+                      setTimeError(invalidHour ? 'Les réservations sont possibles uniquement entre 09:00 et 17:00.' : null);
+                      setSearch(s => ({ ...s, start: val, end: adjustedEnd }));
+                    } else {
+                      setSearch(s => ({ ...s, start: val }));
+                    }
+                  }}
+                  className="w-full p-3 rounded-lg border border-primary-200 text-black"
+                />
+              </div>
+              <div>
+                <label className="text-sm text-primary-700 mb-1 block">Date de retour</label>
+                <input
+                  type="datetime-local"
+                  value={search.end}
+                  step={STEP_MINUTES * 60}
+                  onChange={(e) => {
+                    setTimeError(null);
+                    let val = e.target.value;
+                    const raw = new Date(val);
+                    if (!isNaN(raw.getTime())) {
+                      let clampedEnd = clampToBusinessHours(raw, OPEN_HOUR, CLOSE_HOUR);
+                      const startDate = search.start ? clampToBusinessHours(new Date(search.start), OPEN_HOUR, CLOSE_HOUR) : null;
+                      if (startDate && clampedEnd <= startDate) {
+                        const oneHour = new Date(startDate.getTime() + MIN_DURATION_HOURS * 60 * 60 * 1000);
+                        clampedEnd = clampToBusinessHours(oneHour, OPEN_HOUR, CLOSE_HOUR);
+                        if (clampedEnd <= startDate) {
+                          const nextDay = new Date(startDate);
+                          nextDay.setDate(nextDay.getDate() + 1);
+                          nextDay.setHours(OPEN_HOUR, 0, 0, 0);
+                          clampedEnd = nextDay;
+                        }
+                      }
+                      const invalidHour = isOutsideBusinessHours(clampedEnd, OPEN_HOUR, CLOSE_HOUR);
+                      setTimeError(invalidHour ? 'Les réservations sont possibles uniquement entre 09:00 et 17:00.' : null);
+                      val = toInputDateTimeString(clampedEnd);
+                    }
+                    setSearch(s => ({ ...s, end: val }));
+                  }}
+                  min={minEndString || undefined}
+                  className="w-full p-3 rounded-lg border border-primary-200 text-black"
+                />
+                {timeError && (
+                  <p className="mt-1 text-xs text-red-600">{timeError}</p>
+                )}
+                {intervalInvalid && (
+                  <p className="mt-1 text-xs text-red-600">La date de retour doit être après la date de départ.</p>
+                )}
+              </div>
+            </div>
+            <div className="mt-4">
+              <button
+                onClick={submitSearch}
+                disabled={intervalInvalid || !!timeError || !search.pickup || !search.start || !search.end}
+                className={`w-full py-3 rounded-lg transition-colors ${intervalInvalid || !!timeError || !search.pickup || !search.start || !search.end ? 'bg-gray-300 text-gray-600 cursor-not-allowed' : 'bg-primary-900 text-white hover:bg-primary-800'}`}
+              >
+                Voir les voitures disponibles
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* Scroll Indicator */}
@@ -206,7 +393,7 @@ export default function Home() {
                 <div className="p-6">
                   <h3 className="text-xl font-bold text-primary-900 mb-2 font-serif">{car.name}</h3>
                   <div className="flex items-center space-x-4 text-sm text-primary-500 mb-6">
-                    {car.features.map((feature, i) => (
+                    {car.features.map((feature: any, i: number) => (
                       <span key={i} className="flex items-center">
                         <CheckCircle className="h-3 w-3 mr-1 text-gold-500" />
                         {feature}

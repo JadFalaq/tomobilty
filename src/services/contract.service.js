@@ -1,10 +1,15 @@
-const jsPDF = require('jspdf');
 const prisma = require('../config/prisma');
-const path = require('path');
-const fs = require('fs').promises;
+const { generateContractPDF, generatePDFPath } = require('../utils/pdf.utils');
+const { generateContractNumber } = require('../utils/booking.utils');
+const { ContractGenerationError } = require('../errors/booking.errors');
 
-// Generate rental contract PDF
-const generateRentalContract = async (bookingId, templateId = 1) => {
+/**
+ * Generate rental contract for a booking
+ * @param {number} bookingId - Booking ID
+ * @param {number} templateId - Contract template ID (optional)
+ * @returns {Promise<Object>} Generated contract details
+ */
+const generateContract = async (bookingId, templateId = 1) => {
   try {
     // Get booking with all related data
     const booking = await prisma.booking.findUnique({
@@ -23,7 +28,7 @@ const generateRentalContract = async (bookingId, templateId = 1) => {
     });
 
     if (!booking) {
-      throw new Error('Réservation non trouvée');
+      throw new ContractGenerationError(bookingId, 'Réservation non trouvée');
     }
 
     // Get contract template
@@ -32,219 +37,187 @@ const generateRentalContract = async (bookingId, templateId = 1) => {
     });
 
     if (!template) {
-      throw new Error('Modèle de contrat non trouvé');
+      throw new ContractGenerationError(bookingId, 'Modèle de contrat non trouvé');
     }
 
-    // Generate contract data
+    // Generate contract number
+    const contractNumber = generateContractNumber(bookingId);
+
+    // Prepare contract data
     const contractData = {
-      contract_number: `CONT-${Date.now()}-${bookingId}`,
-      booking_id: bookingId,
-      user: {
+      contractNumber,
+      bookingDetails: {
+        dates: {
+          debut: booking.date_debut.toLocaleDateString('fr-FR'),
+          fin: booking.date_fin.toLocaleDateString('fr-FR')
+        },
+        locations: {
+          prise: booking.lieu_prise_en_charge || 'À définir',
+          retour: booking.lieu_retour || 'À définir'
+        },
+        price: {
+          total: parseFloat(booking.prix_total),
+          caution: parseFloat(booking.caution_payee)
+        }
+      },
+      mainDriver: {
         nom: booking.user.nom,
         prenom: booking.user.prenom,
-        email: booking.user.email,
-        telephone: booking.user.telephone,
-        adresse: booking.user.adresse,
-        permis_conduire: booking.user.permis_conduire
+        permis: booking.user.permis_conduire || 'Non renseigné',
+        adresse: booking.user.adresse || 'Non renseignée'
       },
-      car: {
-        marque: booking.car.brand.name,
-        modele: booking.car.modele,
-        annee: booking.car.annee,
-        immatriculation: booking.car.immatriculation,
-        couleur: booking.car.couleur,
-        prix_par_jour: booking.car.prix_par_jour,
-        caution: booking.car.caution
+      additionalDrivers: booking.additionalDrivers.map(driver => ({
+        nom: driver.nom,
+        prenom: driver.prenom,
+        permis: driver.permis_numero
+      })),
+      vehicle: {
+        brand: booking.car.brand.name,
+        model: booking.car.modele,
+        registration: booking.car.immatriculation,
+        year: booking.car.annee || 'Non renseigné'
       },
-      rental: {
-        date_debut: booking.date_debut,
-        date_fin: booking.date_fin,
-        lieu_prise_en_charge: booking.lieu_prise_en_charge,
-        lieu_retour: booking.lieu_retour,
-        prix_total: booking.prix_total,
-        caution_payee: booking.caution_payee
+      insurance: {
+        type: 'Responsabilité civile obligatoire',
+        coverage: 'Couverture de base'
       },
-      additional_drivers: booking.additionalDrivers,
-      generated_at: new Date(),
-      terms_and_conditions: getTermsAndConditions()
+      terms: getTermsAndConditions(),
+      signatures: {
+        customer: null,
+        agent: null
+      },
+      vehicleCondition: {
+        start: null,
+        end: null
+      }
     };
 
-    // Create PDF
-    const pdfBuffer = await createContractPDF(contractData, template);
+    // Generate PDF
+    const pdfPath = generatePDFPath('contract', contractNumber);
+    await generateContractPDF(contractData, pdfPath);
 
     // Save contract to database
     const contract = await prisma.rentalContract.create({
       data: {
         booking_id: bookingId,
         template_id: templateId,
-        contract_number: contractData.contract_number,
+        contract_number: contractNumber,
         contract_data: JSON.stringify(contractData),
-        pdf_path: `contracts/${contractData.contract_number}.pdf`
+        pdf_path: pdfPath
       }
     });
 
-    // Save PDF file
-    const contractsDir = path.join(process.cwd(), 'public', 'contracts');
-    await fs.mkdir(contractsDir, { recursive: true });
-    const filePath = path.join(contractsDir, `${contractData.contract_number}.pdf`);
-    await fs.writeFile(filePath, pdfBuffer);
+    console.log(`✅ Contract ${contractNumber} generated for booking ${bookingId}`);
 
     return {
       contract,
       contractData,
-      pdfPath: filePath
+      pdfPath
     };
+
   } catch (error) {
     console.error('Error generating contract:', error);
+    throw new ContractGenerationError(bookingId, error.message);
+  }
+};
+
+/**
+ * Sign contract electronically
+ * @param {number} contractId - Contract ID
+ * @param {Object} signatureData - Signature information
+ * @returns {Promise<Object>} Updated contract
+ */
+const signContract = async (contractId, signatureData) => {
+  try {
+    const { customer_signature, agent_signature } = signatureData;
+
+    const contract = await prisma.rentalContract.findUnique({
+      where: { id: contractId }
+    });
+
+    if (!contract) {
+      throw new Error('Contrat introuvable');
+    }
+
+    const contractData = JSON.parse(contract.contract_data);
+    contractData.signatures = {
+      customer: customer_signature,
+      agent: agent_signature || 'TOMOBILTY - Signature électronique'
+    };
+
+    // Update contract
+    const updatedContract = await prisma.rentalContract.update({
+      where: { id: contractId },
+      data: {
+        contract_data: JSON.stringify(contractData),
+        signed_at: new Date()
+      }
+    });
+
+    // Regenerate PDF with signatures
+    await generateContractPDF(contractData, contract.pdf_path);
+
+    console.log(`✅ Contract ${contract.contract_number} signed`);
+
+    return updatedContract;
+
+  } catch (error) {
+    console.error('Error signing contract:', error);
     throw error;
   }
 };
 
-// Create PDF document
-const createContractPDF = async (contractData, template) => {
-  const doc = new jsPDF();
-  
-  // Set font
-  doc.setFont('helvetica');
-  
-  let yPosition = 20;
-  
-  // Header
-  doc.setFontSize(20);
-  doc.setFont('helvetica', 'bold');
-  doc.text('CONTRAT DE LOCATION DE VÉHICULE', 105, yPosition, { align: 'center' });
-  yPosition += 20;
-  
-  doc.setFontSize(12);
-  doc.setFont('helvetica', 'normal');
-  doc.text(`Contrat N°: ${contractData.contract_number}`, 20, yPosition);
-  doc.text(`Date: ${contractData.generated_at.toLocaleDateString('fr-FR')}`, 150, yPosition);
-  yPosition += 20;
-  
-  // Locataire section
-  doc.setFont('helvetica', 'bold');
-  doc.text('LOCATAIRE:', 20, yPosition);
-  yPosition += 10;
-  
-  doc.setFont('helvetica', 'normal');
-  doc.text(`Nom: ${contractData.user.nom} ${contractData.user.prenom}`, 20, yPosition);
-  yPosition += 7;
-  doc.text(`Email: ${contractData.user.email}`, 20, yPosition);
-  yPosition += 7;
-  doc.text(`Téléphone: ${contractData.user.telephone || 'Non renseigné'}`, 20, yPosition);
-  yPosition += 7;
-  doc.text(`Adresse: ${contractData.user.adresse || 'Non renseignée'}`, 20, yPosition);
-  yPosition += 7;
-  doc.text(`Permis de conduire: ${contractData.user.permis_conduire || 'Non renseigné'}`, 20, yPosition);
-  yPosition += 15;
-  
-  // Véhicule section
-  doc.setFont('helvetica', 'bold');
-  doc.text('VÉHICULE LOUÉ:', 20, yPosition);
-  yPosition += 10;
-  
-  doc.setFont('helvetica', 'normal');
-  doc.text(`Marque et modèle: ${contractData.car.marque} ${contractData.car.modele}`, 20, yPosition);
-  yPosition += 7;
-  doc.text(`Année: ${contractData.car.annee}`, 20, yPosition);
-  yPosition += 7;
-  doc.text(`Immatriculation: ${contractData.car.immatriculation}`, 20, yPosition);
-  yPosition += 7;
-  doc.text(`Couleur: ${contractData.car.couleur}`, 20, yPosition);
-  yPosition += 15;
-  
-  // Conditions de location
-  doc.setFont('helvetica', 'bold');
-  doc.text('CONDITIONS DE LOCATION:', 20, yPosition);
-  yPosition += 10;
-  
-  doc.setFont('helvetica', 'normal');
-  doc.text(`Date de début: ${new Date(contractData.rental.date_debut).toLocaleDateString('fr-FR')}`, 20, yPosition);
-  yPosition += 7;
-  doc.text(`Date de fin: ${new Date(contractData.rental.date_fin).toLocaleDateString('fr-FR')}`, 20, yPosition);
-  yPosition += 7;
-  doc.text(`Lieu de prise en charge: ${contractData.rental.lieu_prise_en_charge || 'À définir'}`, 20, yPosition);
-  yPosition += 7;
-  doc.text(`Lieu de retour: ${contractData.rental.lieu_retour || 'À définir'}`, 20, yPosition);
-  yPosition += 7;
-  doc.text(`Prix par jour: ${contractData.car.prix_par_jour} MAD`, 20, yPosition);
-  yPosition += 7;
-  doc.text(`Prix total: ${contractData.rental.prix_total} MAD`, 20, yPosition);
-  yPosition += 7;
-  doc.text(`Caution: ${contractData.car.caution} MAD`, 20, yPosition);
-  yPosition += 15;
-  
-  // Conducteurs additionnels
-  if (contractData.additional_drivers && contractData.additional_drivers.length > 0) {
-    doc.setFont('helvetica', 'bold');
-    doc.text('CONDUCTEURS ADDITIONNELS:', 20, yPosition);
-    yPosition += 10;
-    
-    doc.setFont('helvetica', 'normal');
-    contractData.additional_drivers.forEach((driver, index) => {
-      doc.text(`${index + 1}. ${driver.nom} ${driver.prenom} - Permis: ${driver.permis_numero}`, 20, yPosition);
-      yPosition += 7;
+/**
+ * Get contract by ID
+ * @param {number} contractId - Contract ID
+ * @returns {Promise<Object>} Contract details
+ */
+const getContract = async (contractId) => {
+  try {
+    const contract = await prisma.rentalContract.findUnique({
+      where: { id: contractId },
+      include: {
+        booking: {
+          include: {
+            user: {
+              select: {
+                nom: true,
+                prenom: true,
+                email: true
+              }
+            },
+            car: {
+              include: {
+                brand: true
+              }
+            }
+          }
+        },
+        template: true
+      }
     });
-    yPosition += 10;
-  }
-  
-  // Terms and conditions
-  if (yPosition > 250) {
-    doc.addPage();
-    yPosition = 20;
-  }
-  
-  doc.setFont('helvetica', 'bold');
-  doc.text('TERMES ET CONDITIONS:', 20, yPosition);
-  yPosition += 10;
-  
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(10);
-  
-  const terms = contractData.terms_and_conditions;
-  const splitTerms = doc.splitTextToSize(terms, 170);
-  
-  splitTerms.forEach(line => {
-    if (yPosition > 280) {
-      doc.addPage();
-      yPosition = 20;
+
+    if (!contract) {
+      throw new Error('Contrat introuvable');
     }
-    doc.text(line, 20, yPosition);
-    yPosition += 5;
-  });
-  
-  // Signatures
-  if (yPosition > 250) {
-    doc.addPage();
-    yPosition = 20;
-  } else {
-    yPosition += 20;
+
+    return {
+      ...contract,
+      contract_data: JSON.parse(contract.contract_data)
+    };
+
+  } catch (error) {
+    console.error('Error getting contract:', error);
+    throw error;
   }
-  
-  doc.setFontSize(12);
-  doc.setFont('helvetica', 'bold');
-  doc.text('SIGNATURES:', 20, yPosition);
-  yPosition += 20;
-  
-  doc.setFont('helvetica', 'normal');
-  doc.text('Locataire:', 20, yPosition);
-  doc.text('Tomobilty (Loueur):', 120, yPosition);
-  yPosition += 30;
-  
-  doc.text('Signature:', 20, yPosition);
-  doc.text('Signature:', 120, yPosition);
-  yPosition += 10;
-  
-  doc.text(`Date: ${contractData.generated_at.toLocaleDateString('fr-FR')}`, 20, yPosition);
-  doc.text(`Date: ${contractData.generated_at.toLocaleDateString('fr-FR')}`, 120, yPosition);
-  
-  return doc.output('arraybuffer');
 };
 
-// Get terms and conditions
+/**
+ * Get terms and conditions text
+ * @returns {string} Terms and conditions
+ */
 const getTermsAndConditions = () => {
-  return `
-1. OBJET DU CONTRAT
+  return `1. OBJET DU CONTRAT
 Le présent contrat a pour objet la location du véhicule décrit ci-dessus aux conditions définies.
 
 2. DURÉE DE LA LOCATION
@@ -279,8 +252,7 @@ En cas de panne ou d'accident, le locataire doit immédiatement contacter Tomobi
 10. RÉSILIATION
 Le contrat peut être résilié par l'une ou l'autre des parties en cas de manquement aux obligations.
 
-Le présent contrat est régi par le droit marocain.
-  `.trim();
+Le présent contrat est régi par le droit marocain.`;
 };
 
 // Initialize default contract template
@@ -304,8 +276,9 @@ const initializeDefaultTemplate = async () => {
 };
 
 module.exports = {
-  generateRentalContract,
-  createContractPDF,
+  generateContract,
+  signContract,
+  getContract,
   getTermsAndConditions,
   initializeDefaultTemplate
 };

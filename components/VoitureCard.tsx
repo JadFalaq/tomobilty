@@ -19,9 +19,10 @@ interface VoitureCardProps {
     ville?: string;
     agence_ville?: string;
   };
+  showReserveButton?: boolean;
 }
 
-export default function VoitureCard({ voiture }: VoitureCardProps) {
+export default function VoitureCard({ voiture, showReserveButton = true }: VoitureCardProps) {
   return (
     <div className="group bg-white rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-500 overflow-hidden border border-primary-100 hover:border-gold-300 flex flex-col h-full">
       <div className="relative h-56 bg-primary-50 overflow-hidden">
@@ -84,15 +85,17 @@ export default function VoitureCard({ voiture }: VoitureCardProps) {
               {formatPrice(voiture.prix_par_jour)}
             </p>
           </div>
-          <Link
-            href={`/voitures/${voiture.id}`}
-            className="group/btn relative bg-primary-900 text-white px-6 py-2.5 rounded-xl overflow-hidden transition-all hover:shadow-lg hover:shadow-primary-900/30"
-          >
-            <span className="relative z-10 flex items-center font-medium">
-                Réserver <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover/btn:translate-x-1" />
-            </span>
-            <div className="absolute inset-0 bg-gold-500 transform scale-x-0 origin-left group-hover/btn:scale-x-100 transition-transform duration-300 ease-out"></div>
-          </Link>
+          {showReserveButton && (
+            <Link
+              href={`/voitures/${voiture.id}`}
+              className="group/btn relative bg-primary-900 text-white px-6 py-2.5 rounded-xl overflow-hidden transition-all hover:shadow-lg hover:shadow-primary-900/30"
+            >
+              <span className="relative z-10 flex items-center font-medium">
+                  Réserver <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover/btn:translate-x-1" />
+              </span>
+              <div className="absolute inset-0 bg-gold-500 transform scale-x-0 origin-left group-hover/btn:scale-x-100 transition-transform duration-300 ease-out"></div>
+            </Link>
+          )}
         </div>
       </div>
     </div>

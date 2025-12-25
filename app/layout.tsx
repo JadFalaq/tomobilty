@@ -29,7 +29,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="fr" className={`${playfair.variable} ${lato.variable}`}>
-      <body className={lato.className}>
+      <body className={`${lato.className} pt-[72px]`}>
         {children}
         <ChatBot />
       </body>

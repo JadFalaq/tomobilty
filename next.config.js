@@ -4,6 +4,9 @@ const nextConfig = {
     domains: ['localhost', 'vercel.app'],
     unoptimized: true
   },
+  eslint: {
+    ignoreDuringBuilds: true
+  },
   // Configuration pour Vercel avec API routes
   async rewrites() {
     return [

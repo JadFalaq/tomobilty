@@ -14,6 +14,7 @@ const contractRoutes = require('../src/routes/contract.routes');
 const reviewRoutes = require('../src/routes/review.routes');
 const adminRoutesComplete = require('../src/routes/admin.routes.complete');
 const testRoutes = require('../src/routes/test.routes');
+const protectionRoutes = require('../src/routes/protection.routes');
 
 // Import middlewares
 const { errorHandler } = require('../src/middlewares/errorHandler.middleware');
@@ -53,6 +54,7 @@ app.use('/api/contracts', contractRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/admin', adminRoutesComplete);
 app.use('/api/test', testRoutes);
+app.use('/api/protections', protectionRoutes);
 
 // 404 handler
 app.use('*', (req, res) => {

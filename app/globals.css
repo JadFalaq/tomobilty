@@ -46,6 +46,33 @@ p, span, div, a, button, input {
   }
 }
 
+/* Payment form inputs visibility fix */
+.payment-form input,
+.payment-form textarea,
+.payment-form select {
+  color: #111827 !important; /* text-gray-900 */
+  background-color: #ffffff !important; /* bg-white */
+}
+.payment-form label {
+  color: #111827 !important;
+}
+.payment-form input::placeholder,
+.payment-form textarea::placeholder {
+  color: #9ca3af !important; /* text-gray-400 */
+}
+.payment-form input:focus,
+.payment-form textarea:focus,
+.payment-form select:focus {
+  color: #111827 !important;
+  background-color: #ffffff !important;
+}
+.payment-form input:disabled,
+.payment-form textarea:disabled,
+.payment-form select:disabled {
+  color: #6b7280 !important; /* text-gray-500 */
+  background-color: #f3f4f6 !important; /* gray-100 */
+}
+
 /* Animations personnalisées */
 @keyframes float {
   0%, 100% {

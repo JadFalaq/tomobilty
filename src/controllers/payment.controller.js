@@ -1,10 +1,17 @@
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
-const prisma = require('../config/prisma');
-const { AppError, asyncHandler } = require('../middlewares/errorHandler.middleware');
+/**
+ * Payment controller refactorisé pour supporter multiple providers (Stripe, CMI, etc.)
+ */
 
-// Create Stripe payment session
+const paymentService = require('../services/payment.service');
+const { asyncHandler } = require('../middlewares/errorHandler.middleware');
+const prisma = require('../config/prisma');
+
+/**
+ * POST /api/payments/create
+ * Create payment session (supports multiple providers)
+ */
 const createPaymentSession = asyncHandler(async (req, res) => {
-  const { booking_id, amount, currency = 'mad' } = req.body;
+  const { booking_id, amount, currency = 'MAD', provider } = req.body;
 
   // Verify booking belongs to user
   const booking = await prisma.booking.findFirst({
@@ -29,7 +36,11 @@ const createPaymentSession = asyncHandler(async (req, res) => {
   });
 
   if (!booking) {
-    throw new AppError('Réservation non trouvée', 404, 'BOOKING_NOT_FOUND');
+    return res.status(404).json({
+      success: false,
+      message: 'Réservation non trouvée',
+      code: 'BOOKING_NOT_FOUND'
+    });
   }
 
   // Check if payment already exists
@@ -43,248 +54,196 @@ const createPaymentSession = asyncHandler(async (req, res) => {
   });
 
   if (existingPayment && existingPayment.status === 'COMPLETED') {
-    throw new AppError('Cette réservation est déjà payée', 400, 'ALREADY_PAID');
+    return res.status(400).json({
+      success: false,
+      message: 'Cette réservation est déjà payée',
+      code: 'ALREADY_PAID'
+    });
   }
 
   try {
-    // Create Stripe checkout session
-    const session = await stripe.checkout.sessions.create({
-      payment_method_types: ['card'],
-      line_items: [
-        {
-          price_data: {
-            currency: currency.toLowerCase(),
-            product_data: {
-              name: `Location ${booking.car.brand.name} ${booking.car.modele}`,
-              description: `Réservation #${booking.id} - Du ${new Date(booking.date_debut).toLocaleDateString('fr-FR')} au ${new Date(booking.date_fin).toLocaleDateString('fr-FR')}`,
-            },
-            unit_amount: Math.round(parseFloat(amount) * 100), // Convert to cents
-          },
-          quantity: 1,
-        },
-      ],
-      mode: 'payment',
-      success_url: `${process.env.FRONTEND_URL}/booking/${booking.id}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.FRONTEND_URL}/booking/${booking.id}/payment-cancel`,
-      customer_email: booking.user.email,
+    // Prepare booking data for payment service
+    const bookingData = {
+      pricing: { totalPrice: parseFloat(amount) },
+      car: booking.car,
+      user: booking.user,
       metadata: {
-        booking_id: booking.id.toString(),
-        user_id: req.user.id.toString()
+        booking_reference: `BK-${booking.id}`,
+        date_debut: booking.date_debut.toISOString().split('T')[0],
+        date_fin: booking.date_fin.toISOString().split('T')[0]
       }
-    });
+    };
 
-    // Create or update payment record
-    const payment = await prisma.payment.upsert({
-      where: {
-        booking_id_user_id: {
-          booking_id: parseInt(booking_id),
-          user_id: req.user.id
-        }
-      },
-      update: {
-        amount: parseFloat(amount),
-        currency: currency.toUpperCase(),
-        status: 'CREATED',
-        provider_session_id: session.id,
-        metadata: JSON.stringify({
-          stripe_session_id: session.id,
-          customer_email: booking.user.email
-        })
-      },
-      create: {
-        booking_id: parseInt(booking_id),
-        user_id: req.user.id,
-        amount: parseFloat(amount),
-        currency: currency.toUpperCase(),
-        status: 'CREATED',
-        provider_session_id: session.id,
-        metadata: JSON.stringify({
-          stripe_session_id: session.id,
-          customer_email: booking.user.email
-        })
-      }
-    });
+    const paymentSession = await paymentService.createPaymentSession(
+      parseInt(booking_id),
+      bookingData,
+      provider
+    );
 
     res.json({
       success: true,
-      data: {
-        session_id: session.id,
-        session_url: session.url,
-        payment_id: payment.id
-      }
+      data: paymentSession
     });
+
   } catch (error) {
-    console.error('Stripe error:', error);
-    throw new AppError('Erreur lors de la création de la session de paiement', 500, 'STRIPE_ERROR');
+    console.error('Payment session creation error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la création de la session de paiement',
+      error: error.message
+    });
   }
 });
 
-// Handle Stripe webhook
-const handleWebhook = asyncHandler(async (req, res) => {
-  const sig = req.headers['stripe-signature'];
-  let event;
+/**
+ * GET /api/payments/return
+ * Handle payment return from provider (browser redirect)
+ */
+const handlePaymentReturn = asyncHandler(async (req, res) => {
+  const provider = req.query.provider || req.body.provider || process.env.PAYMENT_PROVIDER || 'cmi';
 
   try {
-    event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
-  } catch (err) {
-    console.error('Webhook signature verification failed:', err.message);
-    return res.status(400).send(`Webhook Error: ${err.message}`);
-  }
+    const returnResult = await paymentService.handlePaymentReturn(req, provider);
 
-  // Handle the event
-  switch (event.type) {
-    case 'checkout.session.completed':
-      await handlePaymentSuccess(event.data.object);
-      break;
-    case 'checkout.session.expired':
-      await handlePaymentExpired(event.data.object);
-      break;
-    case 'payment_intent.payment_failed':
-      await handlePaymentFailed(event.data.object);
-      break;
-    default:
-      console.log(`Unhandled event type ${event.type}`);
-  }
+    // Redirect to appropriate page based on status
+    const redirectUrl = returnResult.redirect_url;
+    
+    if (req.query.format === 'json') {
+      // For AJAX requests
+      res.json({
+        success: returnResult.status === 'PAID',
+        data: {
+          status: returnResult.status,
+          message: returnResult.message,
+          booking_id: returnResult.booking?.id,
+          payment_id: returnResult.payment?.id,
+          redirect_url: redirectUrl
+        }
+      });
+    } else {
+      // For browser redirects
+      res.redirect(redirectUrl);
+    }
 
-  res.json({ received: true });
+  } catch (error) {
+    console.error('Payment return handling error:', error);
+    
+    const errorUrl = `${process.env.FRONTEND_URL}/payment-error?message=${encodeURIComponent(error.message)}`;
+    
+    if (req.query.format === 'json') {
+      res.status(500).json({
+        success: false,
+        message: 'Erreur lors du traitement du retour de paiement',
+        error: error.message
+      });
+    } else {
+      res.redirect(errorUrl);
+    }
+  }
 });
 
-// Handle successful payment
-const handlePaymentSuccess = async (session) => {
+/**
+ * POST /api/payments/cmi/ipn
+ * Handle CMI IPN (Instant Payment Notification)
+ */
+const handleCmiIpn = asyncHandler(async (req, res) => {
   try {
-    const bookingId = parseInt(session.metadata.booking_id);
-    const userId = parseInt(session.metadata.user_id);
+    const notificationResult = await paymentService.handlePaymentNotification(req, 'cmi');
 
-    // Update payment status
-    await prisma.payment.updateMany({
-      where: {
-        booking_id: bookingId,
-        user_id: userId,
-        provider_session_id: session.id
-      },
-      data: {
-        status: 'COMPLETED',
-        provider_payment_id: session.payment_intent,
-        metadata: JSON.stringify({
-          ...JSON.parse(session.metadata || '{}'),
-          payment_intent: session.payment_intent,
-          amount_total: session.amount_total,
-          currency: session.currency
-        })
-      }
+    console.log('📨 CMI IPN processed:', {
+      booking_id: notificationResult.booking?.id,
+      payment_id: notificationResult.payment?.id,
+      status: notificationResult.payment?.status,
+      already_processed: notificationResult.already_processed
     });
 
-    // Update booking payment status
-    await prisma.booking.update({
-      where: { id: bookingId },
-      data: {
-        paiement_effectue: true,
-        montant_paye: session.amount_total / 100 // Convert from cents
-      }
-    });
+    // Send appropriate response to CMI
+    if (notificationResult.should_ack && notificationResult.ack_response) {
+      res.status(200).send(notificationResult.ack_response);
+    } else {
+      res.status(200).send('OK');
+    }
 
-    // Create invoice
-    const invoiceNumber = `INV-${Date.now()}-${bookingId}`;
-    await prisma.invoice.create({
-      data: {
-        user_id: userId,
-        booking_id: bookingId,
-        payment_id: (await prisma.payment.findFirst({
-          where: {
-            booking_id: bookingId,
-            provider_session_id: session.id
-          }
-        }))?.id,
-        invoice_number: invoiceNumber,
-        amount: session.amount_total / 100,
-        currency: session.currency.toUpperCase(),
-        status: 'PAID'
-      }
-    });
-
-    // Create notification
-    await prisma.notification.create({
-      data: {
-        user_id: userId,
-        title: 'Paiement confirmé',
-        message: `Votre paiement pour la réservation #${bookingId} a été confirmé avec succès.`,
-        type: 'PAYMENT'
-      }
-    });
-
-    console.log(`Payment successful for booking ${bookingId}`);
   } catch (error) {
-    console.error('Error handling payment success:', error);
+    console.error('❌ CMI IPN error:', error);
+    res.status(400).send('ERROR');
   }
-};
+});
 
-// Handle expired payment
-const handlePaymentExpired = async (session) => {
+/**
+ * POST /api/payments/stripe/webhook
+ * Handle Stripe webhooks (legacy support)
+ */
+const handleStripeWebhook = asyncHandler(async (req, res) => {
   try {
-    const bookingId = parseInt(session.metadata.booking_id);
-    const userId = parseInt(session.metadata.user_id);
+    const notificationResult = await paymentService.handlePaymentNotification(req, 'stripe');
 
-    // Update payment status
-    await prisma.payment.updateMany({
-      where: {
-        booking_id: bookingId,
-        user_id: userId,
-        provider_session_id: session.id
-      },
-      data: {
-        status: 'CANCELLED'
-      }
+    console.log('📨 Stripe webhook processed:', {
+      booking_id: notificationResult.booking?.id,
+      payment_id: notificationResult.payment?.id,
+      status: notificationResult.payment?.status
     });
 
-    console.log(`Payment expired for booking ${bookingId}`);
-  } catch (error) {
-    console.error('Error handling payment expiry:', error);
-  }
-};
+    res.json({ received: true });
 
-// Handle failed payment
-const handlePaymentFailed = async (paymentIntent) => {
-  try {
-    // Update payment status based on payment intent
-    await prisma.payment.updateMany({
-      where: {
-        provider_payment_id: paymentIntent.id
-      },
-      data: {
-        status: 'FAILED'
-      }
+  } catch (error) {
+    console.error('❌ Stripe webhook error:', error);
+    res.status(400).json({
+      success: false,
+      message: 'Webhook processing failed',
+      error: error.message
     });
-
-    console.log(`Payment failed for payment intent ${paymentIntent.id}`);
-  } catch (error) {
-    console.error('Error handling payment failure:', error);
   }
-};
+});
 
-// Get payments by booking
+/**
+ * GET /api/payments/:id
+ * Get payment details
+ */
+const getPaymentById = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  const paymentDetails = await paymentService.getPaymentStatus(parseInt(id));
+
+  // Verify user has access to this payment
+  if (req.user.role !== 'ADMIN' && paymentDetails.payment.user_id !== req.user.id) {
+    return res.status(403).json({
+      success: false,
+      message: 'Accès non autorisé à ce paiement'
+    });
+  }
+
+  res.json({
+    success: true,
+    data: paymentDetails
+  });
+});
+
+/**
+ * GET /api/payments/booking/:bookingId
+ * Get payments for a booking
+ */
 const getPaymentsByBooking = asyncHandler(async (req, res) => {
   const { bookingId } = req.params;
 
-  // Verify booking belongs to user
-  const booking = await prisma.booking.findFirst({
-    where: {
-      id: parseInt(bookingId),
-      user_id: req.user.id
-    }
-  });
+  // Verify booking belongs to user (unless admin)
+  if (req.user.role !== 'ADMIN') {
+    const booking = await prisma.booking.findFirst({
+      where: {
+        id: parseInt(bookingId),
+        user_id: req.user.id
+      }
+    });
 
-  if (!booking) {
-    throw new AppError('Réservation non trouvée', 404, 'BOOKING_NOT_FOUND');
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        message: 'Réservation non trouvée'
+      });
+    }
   }
 
-  const payments = await prisma.payment.findMany({
-    where: {
-      booking_id: parseInt(bookingId)
-    },
-    orderBy: {
-      created_at: 'desc'
-    }
-  });
+  const payments = await paymentService.getBookingPayments(parseInt(bookingId));
 
   res.json({
     success: true,
@@ -292,201 +251,82 @@ const getPaymentsByBooking = asyncHandler(async (req, res) => {
   });
 });
 
-// Get payment by ID
-const getPaymentById = asyncHandler(async (req, res) => {
+/**
+ * POST /api/payments/:id/refund
+ * Create refund (Admin only)
+ */
+const createRefund = asyncHandler(async (req, res) => {
   const { id } = req.params;
+  const { amount, reason = 'Remboursement administratif' } = req.body;
 
-  const payment = await prisma.payment.findFirst({
-    where: {
-      id: parseInt(id),
-      user_id: req.user.id
-    },
-    include: {
-      booking: {
-        include: {
-          car: {
-            include: {
-              brand: true
-            }
-          }
-        }
-      },
-      invoices: true
-    }
-  });
-
-  if (!payment) {
-    throw new AppError('Paiement non trouvé', 404, 'PAYMENT_NOT_FOUND');
+  if (req.user.role !== 'ADMIN') {
+    return res.status(403).json({
+      success: false,
+      message: 'Accès non autorisé'
+    });
   }
+
+  const refundResult = await paymentService.createRefund(
+    parseInt(id),
+    amount ? parseFloat(amount) : null,
+    reason
+  );
 
   res.json({
     success: true,
-    data: { payment }
+    message: 'Remboursement créé avec succès',
+    data: refundResult
   });
 });
 
-// Get all payments (Admin only)
-const getAllPayments = asyncHandler(async (req, res) => {
-  const { 
-    page = 1, 
-    limit = 20, 
-    status, 
-    user_id, 
-    booking_id,
-    date_from,
-    date_to
-  } = req.query;
-  
-  const skip = (parseInt(page) - 1) * parseInt(limit);
-
-  const where = {};
-
-  if (status) {
-    where.status = status;
-  }
-
-  if (user_id) {
-    where.user_id = parseInt(user_id);
-  }
-
-  if (booking_id) {
-    where.booking_id = parseInt(booking_id);
-  }
-
-  if (date_from || date_to) {
-    where.created_at = {};
-    if (date_from) where.created_at.gte = new Date(date_from);
-    if (date_to) where.created_at.lte = new Date(date_to);
-  }
-
-  const [payments, total] = await Promise.all([
-    prisma.payment.findMany({
-      where,
-      include: {
-        user: {
-          select: {
-            id: true,
-            email: true,
-            nom: true,
-            prenom: true
-          }
-        },
-        booking: {
-          include: {
-            car: {
-              include: {
-                brand: true
-              }
-            }
-          }
-        }
-      },
-      orderBy: {
-        created_at: 'desc'
-      },
-      skip,
-      take: parseInt(limit)
-    }),
-    prisma.payment.count({ where })
-  ]);
-
-  res.json({
-    success: true,
-    data: {
-      payments,
-      pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
-        total,
-        pages: Math.ceil(total / parseInt(limit))
-      }
-    }
-  });
-});
-
-// Refund payment (Admin only)
-const refundPayment = asyncHandler(async (req, res) => {
+/**
+ * POST /api/payments/:id/cancel
+ * Cancel payment session
+ */
+const cancelPayment = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const { reason } = req.body;
 
   const payment = await prisma.payment.findUnique({
-    where: { id: parseInt(id) },
-    include: {
-      booking: true,
-      user: {
-        select: {
-          id: true,
-          email: true
-        }
-      }
-    }
+    where: { id: parseInt(id) }
   });
 
   if (!payment) {
-    throw new AppError('Paiement non trouvé', 404, 'PAYMENT_NOT_FOUND');
+    return res.status(404).json({
+      success: false,
+      message: 'Paiement non trouvé'
+    });
   }
 
-  if (payment.status !== 'COMPLETED') {
-    throw new AppError('Seuls les paiements complétés peuvent être remboursés', 400, 'PAYMENT_NOT_COMPLETED');
+  // Verify user has access to this payment
+  if (req.user.role !== 'ADMIN' && payment.user_id !== req.user.id) {
+    return res.status(403).json({
+      success: false,
+      message: 'Accès non autorisé à ce paiement'
+    });
   }
 
-  try {
-    // Create Stripe refund
-    const refund = await stripe.refunds.create({
-      payment_intent: payment.provider_payment_id,
-      reason: 'requested_by_customer'
-    });
+  const cancelResult = await paymentService.cancelPayment(parseInt(id));
 
-    // Update payment status
-    await prisma.payment.update({
-      where: { id: parseInt(id) },
-      data: {
-        status: 'REFUNDED',
-        metadata: JSON.stringify({
-          ...JSON.parse(payment.metadata || '{}'),
-          refund_id: refund.id,
-          refund_reason: reason,
-          refunded_at: new Date().toISOString()
-        })
-      }
-    });
-
-    // Update booking
-    await prisma.booking.update({
-      where: { id: payment.booking_id },
-      data: {
-        paiement_effectue: false,
-        montant_paye: 0
-      }
-    });
-
-    // Create notification
-    await prisma.notification.create({
-      data: {
-        user_id: payment.user_id,
-        title: 'Remboursement effectué',
-        message: `Votre paiement pour la réservation #${payment.booking_id} a été remboursé.`,
-        type: 'PAYMENT'
-      }
-    });
-
-    res.json({
-      success: true,
-      message: 'Remboursement effectué avec succès',
-      data: {
-        refund_id: refund.id,
-        amount: refund.amount / 100
-      }
-    });
-  } catch (error) {
-    console.error('Stripe refund error:', error);
-    throw new AppError('Erreur lors du remboursement', 500, 'REFUND_ERROR');
-  }
+  res.json({
+    success: true,
+    message: 'Paiement annulé avec succès',
+    data: cancelResult
+  });
 });
 
-// Get payment statistics (Admin only)
+/**
+ * GET /api/payments/admin/statistics
+ * Get payment statistics (Admin only)
+ */
 const getPaymentStatistics = asyncHandler(async (req, res) => {
-  const { period = '30d' } = req.query;
+  const { period = '30d', provider } = req.query;
+
+  if (req.user.role !== 'ADMIN') {
+    return res.status(403).json({
+      success: false,
+      message: 'Accès non autorisé'
+    });
+  }
 
   let dateFilter = {};
   const now = new Date();
@@ -515,50 +355,46 @@ const getPaymentStatistics = asyncHandler(async (req, res) => {
       break;
   }
 
+  if (provider) {
+    dateFilter.provider = provider;
+  }
+
   const [
     totalPayments,
     completedPayments,
     failedPayments,
     totalRevenue,
     averagePayment,
-    paymentsByStatus
+    paymentsByStatus,
+    paymentsByProvider
   ] = await Promise.all([
     prisma.payment.count({ where: dateFilter }),
     prisma.payment.count({
-      where: {
-        ...dateFilter,
-        status: 'COMPLETED'
-      }
+      where: { ...dateFilter, status: 'COMPLETED' }
     }),
     prisma.payment.count({
-      where: {
-        ...dateFilter,
-        status: 'FAILED'
-      }
+      where: { ...dateFilter, status: 'FAILED' }
     }),
     prisma.payment.aggregate({
-      where: {
-        ...dateFilter,
-        status: 'COMPLETED'
-      },
+      where: { ...dateFilter, status: 'COMPLETED' },
       _sum: { amount: true }
     }),
     prisma.payment.aggregate({
-      where: {
-        ...dateFilter,
-        status: 'COMPLETED'
-      },
+      where: { ...dateFilter, status: 'COMPLETED' },
       _avg: { amount: true }
     }),
     prisma.payment.groupBy({
       by: ['status'],
       where: dateFilter,
       _count: true,
-      orderBy: {
-        _count: {
-          status: 'desc'
-        }
-      }
+      orderBy: { _count: { status: 'desc' } }
+    }),
+    prisma.payment.groupBy({
+      by: ['provider'],
+      where: dateFilter,
+      _count: true,
+      _sum: { amount: true },
+      orderBy: { _count: { provider: 'desc' } }
     })
   ]);
 
@@ -566,6 +402,7 @@ const getPaymentStatistics = asyncHandler(async (req, res) => {
     success: true,
     data: {
       period,
+      provider_filter: provider,
       statistics: {
         total_payments: totalPayments,
         completed_payments: completedPayments,
@@ -576,18 +413,44 @@ const getPaymentStatistics = asyncHandler(async (req, res) => {
         payments_by_status: paymentsByStatus.map(item => ({
           status: item.status,
           count: item._count
+        })),
+        payments_by_provider: paymentsByProvider.map(item => ({
+          provider: item.provider,
+          count: item._count,
+          revenue: item._sum.amount || 0
         }))
       }
     }
   });
 });
 
+/**
+ * GET /api/payments/providers/info
+ * Get available payment providers info
+ */
+const getProvidersInfo = asyncHandler(async (req, res) => {
+  const PaymentProviderFactory = require('../services/providers/PaymentProviderFactory');
+  
+  const providersInfo = PaymentProviderFactory.getAllProvidersInfo();
+  
+  res.json({
+    success: true,
+    data: {
+      current_provider: process.env.PAYMENT_PROVIDER || 'cmi',
+      available_providers: providersInfo
+    }
+  });
+});
+
 module.exports = {
   createPaymentSession,
-  handleWebhook,
-  getPaymentsByBooking,
+  handlePaymentReturn,
+  handleCmiIpn,
+  handleStripeWebhook,
   getPaymentById,
-  getAllPayments,
-  refundPayment,
-  getPaymentStatistics
+  getPaymentsByBooking,
+  createRefund,
+  cancelPayment,
+  getPaymentStatistics,
+  getProvidersInfo
 };

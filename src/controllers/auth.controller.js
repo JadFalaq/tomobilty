@@ -502,20 +502,6 @@ const getProfile = asyncHandler(async (req, res) => {
           tier: true
         }
       }
-    },
-    select: {
-      id: true,
-      email: true,
-      nom: true,
-      prenom: true,
-      telephone: true,
-      adresse: true,
-      role: true,
-      email_verified: true,
-      phone_verified: true,
-      permis_conduire: true,
-      date_creation: true,
-      loyaltyAccount: true
     }
   });
 

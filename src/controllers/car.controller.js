@@ -1,6 +1,7 @@
 const prisma = require('../config/prisma');
 const { AppError, asyncHandler } = require('../middlewares/errorHandler.middleware');
 const { calculateRentalDays } = require('../utils/validation.util');
+ 
 
 // Get all cars with filters and pagination
 const getCars = asyncHandler(async (req, res) => {
@@ -397,6 +398,81 @@ const checkAvailability = asyncHandler(async (req, res) => {
   });
 });
 
+// Get available cars by time interval (ignore location)
+const getAvailableCars = asyncHandler(async (req, res) => {
+  try {
+    console.log('[GET /api/cars/available] Query:', req.query);
+    const { start_date, end_date } = req.query;
+    if (!start_date || !end_date) {
+      const validationErrors = [];
+      if (!start_date) validationErrors.push({ field: 'start_date', message: 'start_date is required' });
+      if (!end_date) validationErrors.push({ field: 'end_date', message: 'end_date is required' });
+      console.warn('[CARS AVAILABLE] validation errors:', validationErrors);
+      return res.status(400).json({
+        success: false,
+        message: 'Données invalides',
+        errors: validationErrors,
+        received: req.query
+      });
+    }
+    const start = new Date(start_date);
+    const end = new Date(end_date);
+    console.log('[GET /api/cars/available] Parsed dates:', { start, end });
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      const validationErrors = [];
+      if (isNaN(start.getTime())) validationErrors.push({ field: 'start_date', message: 'Invalid date format' });
+      if (isNaN(end.getTime())) validationErrors.push({ field: 'end_date', message: 'Invalid date format' });
+      console.warn('[CARS AVAILABLE] validation errors:', validationErrors);
+      return res.status(400).json({
+        success: false,
+        message: 'Données invalides',
+        errors: validationErrors,
+        received: req.query
+      });
+    }
+    if (end <= start) {
+      const validationErrors = [{ field: 'end_date', message: 'end_date must be after start_date' }];
+      console.warn('[CARS AVAILABLE] validation errors:', validationErrors);
+      return res.status(400).json({
+        success: false,
+        message: 'Données invalides',
+        errors: validationErrors,
+        received: req.query
+      });
+    }
+    const where = {
+      statut: 'DISPONIBLE',
+      disponible: true,
+      bookings: {
+        none: {
+          AND: [
+            { date_debut: { lte: end } },
+            { date_fin: { gte: start } },
+            {
+              status: {
+                name: { notIn: ['CANCELLED', 'REJECTED'] }
+              }
+            }
+          ]
+        }
+      }
+    };
+    const cars = await prisma.car.findMany({
+      where,
+      include: {
+        brand: true,
+        category: true,
+        images: { where: { is_primary: true } }
+      },
+      orderBy: { prix_par_jour: 'asc' }
+    });
+    res.json({ success: true, data: { cars, total: cars.length } });
+  } catch (err) {
+    console.error('[GET /api/cars/available] Unexpected error:', err?.message);
+    return res.status(500).json({ success: false, error: 'Server error', message: err?.message });
+  }
+});
+
 // Create new car (Admin only)
 const createCar = asyncHandler(async (req, res) => {
   const {
@@ -742,6 +818,7 @@ module.exports = {
   searchCars,
   getCarById,
   checkAvailability,
+  getAvailableCars,
   createCar,
   updateCar,
   deleteCar,

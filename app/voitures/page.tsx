@@ -147,7 +147,7 @@ export default function VoituresPage() {
         ) : voitures.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8">
             {voitures.map((voiture: any) => (
-              <VoitureCard key={voiture.id} voiture={voiture} />
+              <VoitureCard key={voiture.id} voiture={voiture} showReserveButton={false} />
             ))}
           </div>
         ) : (

@@ -1,125 +1,295 @@
-const prisma = require('../config/prisma');
-const { AppError, asyncHandler } = require('../middlewares/errorHandler.middleware');
 const loyaltyService = require('../services/loyalty.service');
+const { asyncHandler } = require('../middlewares/errorHandler.middleware');
+const {
+  InsufficientPointsError,
+  LoyaltyAccountNotFoundError,
+  InvalidRewardError,
+  InvalidPointsAmountError
+} = require('../errors/loyalty.errors');
 
-// Get user's loyalty account
-const getLoyaltyAccount = asyncHandler(async (req, res) => {
-  const loyaltyAccount = await loyaltyService.getLoyaltyAccount(req.user.id);
+/**
+ * GET /api/loyalty/account/:userId?
+ * Get complete user loyalty information
+ */
+const getUserLoyaltyInfo = asyncHandler(async (req, res) => {
+  // Check if user is authenticated
+  if (!req.user || !req.user.id) {
+    return res.status(401).json({
+      success: false,
+      message: 'Authentification requise'
+    });
+  }
 
-  // Calculate points until next tier
-  const nextTier = await prisma.loyaltyTier.findFirst({
-    where: {
-      min_points: {
-        gt: loyaltyAccount.points_balance
-      }
-    },
-    orderBy: {
-      min_points: 'asc'
-    }
-  });
+  const userId = req.params.userId ? parseInt(req.params.userId) : req.user.id;
+  
+  // Ensure user can only access their own data (unless admin)
+  if (userId !== req.user.id && req.user.role !== 'ADMIN') {
+    return res.status(403).json({
+      success: false,
+      message: 'Accès non autorisé'
+    });
+  }
 
-  const pointsUntilNextTier = nextTier ? nextTier.min_points - loyaltyAccount.points_balance : 0;
+  try {
+    const loyaltyInfo = await loyaltyService.getUserLoyaltyInfo(userId);
+
+    res.json({
+      success: true,
+      data: loyaltyInfo
+    });
+  } catch (error) {
+    console.error('Error getting loyalty info:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la récupération des informations de fidélité'
+    });
+  }
+});
+
+/**
+ * POST /api/loyalty/calculate-points
+ * Calculate points for a booking amount
+ */
+const calculatePoints = asyncHandler(async (req, res) => {
+  const { bookingAmount, userId } = req.body;
+  
+  if (!bookingAmount || bookingAmount <= 0) {
+    return res.status(400).json({
+      success: false,
+      message: 'Montant de réservation requis et doit être positif'
+    });
+  }
+
+  const targetUserId = userId || req.user.id;
+  const pointsCalculation = await loyaltyService.calculatePointsEarned(bookingAmount, targetUserId);
 
   res.json({
     success: true,
-    data: {
-      loyaltyAccount,
-      next_tier: nextTier,
-      points_until_next_tier: pointsUntilNextTier
-    }
+    data: pointsCalculation
   });
 });
 
-// Get available rewards for user
-const getAvailableRewards = asyncHandler(async (req, res) => {
-  const rewards = await loyaltyService.getAvailableRewards(req.user.id);
+/**
+ * POST /api/loyalty/add-points
+ * Add points to user account
+ */
+const addPoints = asyncHandler(async (req, res) => {
+  const { userId, points, bookingId, description } = req.body;
+  
+  if (!userId || !points) {
+    return res.status(400).json({
+      success: false,
+      message: 'ID utilisateur et points requis'
+    });
+  }
+
+  const result = await loyaltyService.addPoints(
+    parseInt(userId),
+    parseInt(points),
+    bookingId ? parseInt(bookingId) : null,
+    description
+  );
 
   res.json({
     success: true,
-    data: { rewards }
-  });
-});
-
-// Redeem a reward
-const redeemReward = asyncHandler(async (req, res) => {
-  const { id } = req.params;
-
-  const result = await loyaltyService.redeemReward(req.user.id, parseInt(id));
-
-  res.json({
-    success: true,
-    message: 'Récompense échangée avec succès',
+    message: 'Points ajoutés avec succès',
     data: result
   });
 });
 
-// Get loyalty transactions history
-const getLoyaltyTransactions = asyncHandler(async (req, res) => {
-  const { page = 1, limit = 20 } = req.query;
-  const skip = (parseInt(page) - 1) * parseInt(limit);
-
-  const loyaltyAccount = await prisma.loyaltyAccount.findUnique({
-    where: { user_id: req.user.id }
-  });
-
-  if (!loyaltyAccount) {
-    throw new AppError('Compte de fidélité non trouvé', 404, 'LOYALTY_ACCOUNT_NOT_FOUND');
+/**
+ * POST /api/loyalty/redeem-points
+ * Redeem points for discount
+ */
+const redeemPoints = asyncHandler(async (req, res) => {
+  const { userId, points, description } = req.body;
+  
+  if (!userId || !points) {
+    return res.status(400).json({
+      success: false,
+      message: 'ID utilisateur et points requis'
+    });
   }
 
-  const [transactions, total] = await Promise.all([
-    prisma.loyaltyTransaction.findMany({
-      where: {
-        loyalty_account_id: loyaltyAccount.id
-      },
-      include: {
-        booking: {
-          include: {
-            car: {
-              include: {
-                brand: true
-              }
-            }
-          }
+  const targetUserId = userId || req.user.id;
+  
+  // Ensure user can only redeem their own points (unless admin)
+  if (targetUserId !== req.user.id && req.user.role !== 'ADMIN') {
+    return res.status(403).json({
+      success: false,
+      message: 'Accès non autorisé'
+    });
+  }
+
+  const result = await loyaltyService.redeemPoints(
+    targetUserId,
+    parseInt(points),
+    description
+  );
+
+  res.json({
+    success: true,
+    message: 'Points échangés avec succès',
+    data: result
+  });
+});
+
+/**
+ * GET /api/loyalty/rewards
+ * Get available rewards for user
+ */
+const getAvailableRewards = asyncHandler(async (req, res) => {
+  const userId = req.query.userId ? parseInt(req.query.userId) : req.user.id;
+  
+  // Ensure user can only access their own data (unless admin)
+  if (userId !== req.user.id && req.user.role !== 'ADMIN') {
+    return res.status(403).json({
+      success: false,
+      message: 'Accès non autorisé'
+    });
+  }
+
+  try {
+    const rewards = await loyaltyService.getAvailableRewards(userId);
+
+    res.json({
+      success: true,
+      data: { rewards }
+    });
+  } catch (error) {
+    console.error('Error getting rewards:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la récupération des récompenses'
+    });
+  }
+});
+
+/**
+ * POST /api/loyalty/redeem-reward
+ * Redeem a specific reward
+ */
+const redeemReward = asyncHandler(async (req, res) => {
+  const { userId, rewardId } = req.body;
+  
+  if (!rewardId) {
+    return res.status(400).json({
+      success: false,
+      message: 'ID de récompense requis'
+    });
+  }
+
+  const targetUserId = userId || req.user.id;
+  
+  // Ensure user can only redeem for themselves (unless admin)
+  if (targetUserId !== req.user.id && req.user.role !== 'ADMIN') {
+    return res.status(403).json({
+      success: false,
+      message: 'Accès non autorisé'
+    });
+  }
+
+  try {
+    const result = await loyaltyService.redeemReward(targetUserId, parseInt(rewardId));
+
+    res.json({
+      success: true,
+      message: 'Récompense échangée avec succès',
+      data: result
+    });
+  } catch (error) {
+    console.error('Error redeeming reward:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Erreur lors de l\'échange de la récompense'
+    });
+  }
+});
+
+/**
+ * GET /api/loyalty/transactions/:userId
+ * Get transaction history for user
+ */
+const getTransactionHistory = asyncHandler(async (req, res) => {
+  const userId = req.params.userId ? parseInt(req.params.userId) : req.user.id;
+  const { limit = 20, page = 1 } = req.query;
+  
+  // Ensure user can only access their own data (unless admin)
+  if (userId !== req.user.id && req.user.role !== 'ADMIN') {
+    return res.status(403).json({
+      success: false,
+      message: 'Accès non autorisé'
+    });
+  }
+
+  try {
+    const transactions = await loyaltyService.getTransactionHistory(userId, parseInt(limit));
+
+    res.json({
+      success: true,
+      data: {
+        transactions,
+        pagination: {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total: transactions.length
         }
-      },
-      orderBy: {
-        created_at: 'desc'
-      },
-      skip,
-      take: parseInt(limit)
-    }),
-    prisma.loyaltyTransaction.count({
-      where: {
-        loyalty_account_id: loyaltyAccount.id
       }
-    })
-  ]);
+    });
+  } catch (error) {
+    console.error('Error getting transaction history:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la récupération de l\'historique'
+    });
+  }
+});
+
+/**
+ * GET /api/loyalty/tiers
+ * Get all loyalty tiers
+ */
+const getAllTiers = asyncHandler(async (req, res) => {
+  try {
+    const tiers = await loyaltyService.getAllTiers();
+
+    res.json({
+      success: true,
+      data: { tiers }
+    });
+  } catch (error) {
+    console.error('Error getting tiers:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la récupération des niveaux de fidélité'
+    });
+  }
+});
+
+/**
+ * POST /api/loyalty/calculate-discount
+ * Calculate discount based on user tier
+ */
+const calculateDiscount = asyncHandler(async (req, res) => {
+  const { userId, bookingAmount } = req.body;
+  
+  if (!bookingAmount || bookingAmount <= 0) {
+    return res.status(400).json({
+      success: false,
+      message: 'Montant de réservation requis et doit être positif'
+    });
+  }
+
+  const targetUserId = userId || req.user.id;
+  const discount = await loyaltyService.calculateDiscount(targetUserId, bookingAmount);
 
   res.json({
     success: true,
     data: {
-      transactions,
-      pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
-        total,
-        pages: Math.ceil(total / parseInt(limit))
-      }
+      discount_amount: discount,
+      booking_amount: bookingAmount,
+      final_amount: bookingAmount - discount
     }
-  });
-});
-
-// Get all loyalty tiers
-const getLoyaltyTiers = asyncHandler(async (req, res) => {
-  const tiers = await prisma.loyaltyTier.findMany({
-    orderBy: {
-      min_points: 'asc'
-    }
-  });
-
-  res.json({
-    success: true,
-    data: { tiers }
   });
 });
 
@@ -338,17 +508,69 @@ const deleteReward = asyncHandler(async (req, res) => {
   });
 });
 
+// Error handling middleware for loyalty-specific errors
+const handleLoyaltyErrors = (error, req, res, next) => {
+  if (error instanceof InsufficientPointsError) {
+    return res.status(400).json({
+      success: false,
+      message: error.message,
+      code: error.code,
+      data: {
+        required: error.required,
+        available: error.available
+      }
+    });
+  }
+  
+  if (error instanceof LoyaltyAccountNotFoundError) {
+    return res.status(404).json({
+      success: false,
+      message: error.message,
+      code: error.code
+    });
+  }
+  
+  if (error instanceof InvalidRewardError) {
+    return res.status(400).json({
+      success: false,
+      message: error.message,
+      code: error.code
+    });
+  }
+  
+  if (error instanceof InvalidPointsAmountError) {
+    return res.status(400).json({
+      success: false,
+      message: error.message,
+      code: error.code
+    });
+  }
+  
+  // Pass other errors to the default error handler
+  next(error);
+};
+
 module.exports = {
-  getLoyaltyAccount,
+  // Main API endpoints
+  getUserLoyaltyInfo,
+  calculatePoints,
+  addPoints,
+  redeemPoints,
   getAvailableRewards,
   redeemReward,
-  getLoyaltyTransactions,
-  getLoyaltyTiers,
+  getTransactionHistory,
+  getAllTiers,
+  calculateDiscount,
+  
+  // Admin endpoints (keeping existing ones)
   getAllLoyaltyAccounts,
   awardPointsManually,
   createTier,
   updateTier,
   createReward,
   updateReward,
-  deleteReward
+  deleteReward,
+  
+  // Error handler
+  handleLoyaltyErrors
 };

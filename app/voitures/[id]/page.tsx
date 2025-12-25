@@ -1,22 +1,30 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import DateRangePicker from '@/components/DateRangePicker';
 import { voituresAPI, reservationsAPI, authAPI } from '@/lib/api';
 import { formatPrice, calculerNombreJours } from '@/lib/utils';
-import { Car, Users, User, Fuel, Settings, MapPin, Calendar, Shield, Check, Gift, Upload, CreditCard } from 'lucide-react';
-import Tesseract from 'tesseract.js';
+import { Car, Users, User, Fuel, Settings, MapPin, Calendar, Shield, Check, Gift, CreditCard } from 'lucide-react';
 import { jsPDF } from 'jspdf';
+import PaymentProcessor from '@/components/PaymentProcessor';
 
 export default function VoitureDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const sp = useSearchParams();
+  const LOCATIONS = [
+    'Casablanca (Ville)',
+    'Casablanca – Aéroport Mohammed V (CMN)',
+    'Rabat (Ville)',
+    'Rabat – Aéroport Rabat-Salé (RBA)'
+  ];
   const [voiture, setVoiture] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [step, setStep] = useState(1);
+  const [createdBookingId, setCreatedBookingId] = useState<number | null>(null);
   const [reservation, setReservation] = useState({
     dateDebut: '',
     dateFin: '',
@@ -30,8 +38,15 @@ export default function VoitureDetailPage() {
     telephone: '',
     cinNumero: '',
     permisNumero: '',
+    dateNaissance: '',
+    adresse: '',
+    ville: '',
+    codePostal: '',
+    profession: '',
     optionChauffeur: false
   });
+  const [paymentType, setPaymentType] = useState<'ONLINE' | 'AGENCE'>('ONLINE');
+  const [mileageOption, setMileageOption] = useState<'INCLUDED_340' | 'UNLIMITED'>('INCLUDED_340');
   const [prixTotal, setPrixTotal] = useState(0);
   const [disponible, setDisponible] = useState(true);
   const [verificationEnCours, setVerificationEnCours] = useState(false);
@@ -40,14 +55,23 @@ export default function VoitureDetailPage() {
   const [user, setUser] = useState<any>(null);
   const [utiliserPoints, setUtiliserPoints] = useState(false);
 
-  // OCR States
-  const [ocrLoading, setOcrLoading] = useState(false);
-  const [ocrProgress, setOcrProgress] = useState(0);
+  
 
   useEffect(() => {
     if (params.id) {
       chargerVoiture();
     }
+    const sd = sp.get('start_date') || '';
+    const ed = sp.get('end_date') || '';
+    const pl = sp.get('pickup_location') || '';
+    const rl = sp.get('return_location') || '';
+    setReservation(prev => ({
+      ...prev,
+      dateDebut: sd || prev.dateDebut,
+      dateFin: ed || prev.dateFin,
+      lieuPriseEnCharge: pl || prev.lieuPriseEnCharge,
+      lieuRetour: rl || pl || prev.lieuRetour
+    }));
     // Charger l'utilisateur
     const loadUser = async () => {
       const localData = localStorage.getItem('user');
@@ -101,7 +125,8 @@ export default function VoitureDetailPage() {
     if (!voiture || !reservation.dateDebut || !reservation.dateFin) return;
 
     const nombreJours = calculerNombreJours(reservation.dateDebut, reservation.dateFin);
-    let total = voiture.prixParJour * nombreJours;
+    const prixParJour = voiture.prix_par_jour || voiture.prixParJour || 0;
+    let total = prixParJour * nombreJours;
 
     // Assurance
     const prixAssurance: { [key: string]: number } = {
@@ -133,13 +158,22 @@ export default function VoitureDetailPage() {
       alert('Veuillez sélectionner les dates.');
       return;
     }
+    if (
+      !reservation.lieuPriseEnCharge ||
+      !reservation.lieuRetour ||
+      !LOCATIONS.includes(reservation.lieuPriseEnCharge) ||
+      !LOCATIONS.includes(reservation.lieuRetour)
+    ) {
+      alert('Veuillez choisir les lieux parmi les options proposées.');
+      return;
+    }
     setVerificationEnCours(true);
     try {
       const response = await voituresAPI.verifierDisponibilite(params.id as string, {
         date_debut: reservation.dateDebut,
         date_fin: reservation.dateFin,
       });
-      if (response.data.disponible) {
+      if (response.data.data.available) {
         setDisponible(true);
         setStep(2);
       } else {
@@ -154,63 +188,7 @@ export default function VoitureDetailPage() {
     }
   };
 
-  const handleOCR = async (e: React.ChangeEvent<HTMLInputElement>, type: 'cin' | 'permis') => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setOcrLoading(true);
-    setOcrProgress(0);
-    try {
-      const result = await Tesseract.recognize(file, 'fra', {
-        logger: m => {
-          if (m.status === 'recognizing text') {
-            setOcrProgress(Math.floor(m.progress * 100));
-          }
-        }
-      });
-      
-      const text = result.data.text;
-      console.log('OCR Result:', text);
-
-      // Amélioration de l'extraction des données
-      if (type === 'cin') {
-        // Regex pour CIN marocain (ex: AB123456 ou A 123456)
-        const cinMatch = text.match(/[A-Z]{1,2}\s?[\d]{4,8}/i);
-        if (cinMatch) {
-          setReservation(prev => ({ ...prev, cinNumero: cinMatch[0].replace(/\s/g, '').toUpperCase() }));
-        }
-
-        // Tentative d'extraction du Nom/Prénom (Lignes en majuscules sans chiffres)
-        const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 2);
-        const nameCandidates = lines.filter(l => /^[A-Z\s]+$/.test(l) && !/\d/.test(l));
-        
-        if (nameCandidates.length > 0) {
-          // Heuristique simple: prendre les premières lignes qui ressemblent à des noms
-          // Souvent le nom est avant le prénom sur la CIN
-          if (!reservation.nom && nameCandidates[0]) {
-             setReservation(prev => ({ ...prev, nom: nameCandidates[0] }));
-          }
-          if (!reservation.prenom && nameCandidates[1]) {
-             setReservation(prev => ({ ...prev, prenom: nameCandidates[1] }));
-          }
-        }
-
-      } else if (type === 'permis') {
-         // Regex pour Permis marocain (ex: 10/123456)
-         const permisMatch = text.match(/\d{1,2}\/\d{4,8}/);
-         if (permisMatch) {
-            setReservation(prev => ({ ...prev, permisNumero: permisMatch[0] }));
-         }
-      }
-      
-      alert('Analyse terminée. Veuillez vérifier les informations extraites.');
-    } catch (err) {
-      console.error(err);
-      alert('Erreur lors de l\'analyse OCR.');
-    } finally {
-      setOcrLoading(false);
-    }
-  };
+  
 
   const genererContratPDF = () => {
     const doc = new jsPDF();
@@ -268,38 +246,57 @@ export default function VoitureDetailPage() {
 
   const handleReservation = async () => {
     if (!user) {
-      router.push('/connexion?redirect=/voitures/' + params.id);
+      alert('Veuillez vous connecter pour effectuer une réservation.');
+      router.push('/auth/login');
+      return;
+    }
+
+    // Validation des champs obligatoires
+    if (!reservation.nom || !reservation.prenom || !reservation.email || !reservation.telephone) {
+      alert('Veuillez remplir les champs Nom, Prénom, Email et Téléphone.');
       return;
     }
 
     setReservationEnCours(true);
     try {
       const reservationData = {
-        voitureId: params.id,
-        dateDebut: reservation.dateDebut,
-        dateFin: reservation.dateFin,
-        lieuPriseEnCharge: reservation.lieuPriseEnCharge,
-        lieuRetour: reservation.lieuRetour,
-        modePaiement: reservation.modePaiement,
-        assurance: { type: reservation.assurance },
-        optionChauffeur: reservation.optionChauffeur,
-        utiliserPoints,
-        commentaires: `Client: ${reservation.nom} ${reservation.prenom}, CIN: ${reservation.cinNumero}, Permis: ${reservation.permisNumero}`,
-        conducteurSupplementaire: {
-            nom: reservation.nom,
-            prenom: reservation.prenom,
-            permis: reservation.permisNumero
-        }
+        car_id: parseInt(params.id as string),
+        date_debut: reservation.dateDebut,
+        date_fin: reservation.dateFin,
+        lieu_prise_en_charge: reservation.lieuPriseEnCharge,
+        lieu_retour: reservation.lieuRetour,
+        assurance: reservation.assurance,
+        mode_paiement: reservation.modePaiement,
+        payment_type: paymentType,
+        mileage_option: mileageOption,
+        nom: reservation.nom,
+        prenom: reservation.prenom,
+        email: reservation.email,
+        telephone: reservation.telephone,
+        cin_numero: reservation.cinNumero,
+        permis_numero: reservation.permisNumero,
+        date_naissance: reservation.dateNaissance,
+        adresse: reservation.adresse,
+        ville: reservation.ville,
+        code_postal: reservation.codePostal,
+        profession: reservation.profession,
+        option_chauffeur: reservation.optionChauffeur,
+        prix_total: prixTotal,
+        utiliser_points: utiliserPoints
       };
 
-      await reservationsAPI.creerReservation(reservationData);
+      const response = await reservationsAPI.creerReservation(reservationData);
+      const bookingId = response.data.data.booking?.id || response.data.data.id;
+      
+      // Stocker l'ID de la réservation créée
+      setCreatedBookingId(bookingId);
       
       // Générer le contrat
       genererContratPDF();
 
-      if (reservation.modePaiement === 'en_ligne') {
-        alert('Réservation enregistrée ! Redirection vers le paiement...');
-        router.push('/mes-reservations');
+      if (reservation.modePaiement === 'EN_LIGNE') {
+        // Passer à l'étape de paiement
+        setStep(5);
       } else {
         alert('Réservation confirmée ! Le contrat a été téléchargé.');
         router.push('/mes-reservations');
@@ -323,12 +320,12 @@ export default function VoitureDetailPage() {
         {/* Stepper */}
         <div className="mb-8 flex justify-center">
           <div className="flex items-center">
-            {[1, 2, 3, 4].map((s) => (
+            {[1, 2, 3, 4, 5].map((s) => (
               <div key={s} className="flex items-center">
                 <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${step >= s ? 'bg-gold-500 text-white' : 'bg-gray-200 text-gray-500'}`}>
                   {s}
                 </div>
-                {s < 4 && <div className={`w-16 h-1 bg-gray-200 ${step > s ? 'bg-gold-500' : ''}`} />}
+                {s < 5 && <div className={`w-16 h-1 bg-gray-200 ${step > s ? 'bg-gold-500' : ''}`} />}
               </div>
             ))}
           </div>
@@ -353,26 +350,34 @@ export default function VoitureDetailPage() {
                     <label className="block text-sm font-medium text-gray-700 mb-1">Lieu de prise en charge</label>
                     <div className="relative">
                       <MapPin className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
-                      <input
-                        type="text"
+                      <select
                         value={reservation.lieuPriseEnCharge}
                         onChange={(e) => setReservation({ ...reservation, lieuPriseEnCharge: e.target.value })}
-                        className="pl-10 w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gold-500 text-black"
-                        placeholder="Ville ou aéroport"
-                      />
+                        className="pl-10 w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gold-500 text-black bg-white"
+                        required
+                      >
+                        <option value="" disabled>Sélectionner un lieu</option>
+                        {LOCATIONS.map((loc) => (
+                          <option key={loc} value={loc}>{loc}</option>
+                        ))}
+                      </select>
                     </div>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Lieu de retour</label>
                     <div className="relative">
                       <MapPin className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
-                      <input
-                        type="text"
+                      <select
                         value={reservation.lieuRetour}
                         onChange={(e) => setReservation({ ...reservation, lieuRetour: e.target.value })}
-                        className="pl-10 w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gold-500 text-black"
-                        placeholder="Ville ou aéroport"
-                      />
+                        className="pl-10 w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gold-500 text-black bg-white"
+                        required
+                      >
+                        <option value="" disabled>Sélectionner un lieu</option>
+                        {LOCATIONS.map((loc) => (
+                          <option key={loc} value={loc}>{loc}</option>
+                        ))}
+                      </select>
                     </div>
                   </div>
                 </div>
@@ -389,8 +394,93 @@ export default function VoitureDetailPage() {
             {/* Step 2: Options */}
             {step === 2 && (
               <div className="space-y-6">
-                <h2 className="text-2xl font-bold font-serif text-primary-900">2. Options et Services</h2>
+                <h2 className="text-2xl font-bold font-serif text-primary-900">2. Paiement & Kilométrage</h2>
                 
+                {/* Type de paiement */}
+                <div className="space-y-3">
+                  <h3 className="font-semibold text-lg text-primary-900">Type de paiement</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <label className={`p-4 rounded-lg border cursor-pointer transition-all ${paymentType === 'ONLINE' ? 'border-gold-500 bg-gold-50 ring-1 ring-gold-500' : 'border-gray-200 hover:border-gold-300'}`}>
+                      <input
+                        type="radio"
+                        name="payment_type"
+                        className="sr-only"
+                        checked={paymentType === 'ONLINE'}
+                        onChange={() => { setPaymentType('ONLINE'); setReservation(prev => ({ ...prev, modePaiement: 'EN_LIGNE' })); }}
+                      />
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <CreditCard className={`h-5 w-5 ${paymentType === 'ONLINE' ? 'text-gold-600' : 'text-gray-400'}`} />
+                          <span className="font-medium text-primary-800">En ligne</span>
+                        </div>
+                        <span className="text-sm text-primary-600">Paiement sécurisé</span>
+                      </div>
+                    </label>
+                    <label className={`p-4 rounded-lg border cursor-pointer transition-all ${paymentType === 'AGENCE' ? 'border-gold-500 bg-gold-50 ring-1 ring-gold-500' : 'border-gray-200 hover:border-gold-300'}`}>
+                      <input
+                        type="radio"
+                        name="payment_type"
+                        className="sr-only"
+                        checked={paymentType === 'AGENCE'}
+                        onChange={() => { setPaymentType('AGENCE'); setReservation(prev => ({ ...prev, modePaiement: 'EN_AGENCE' })); }}
+                      />
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <Shield className={`h-5 w-5 ${paymentType === 'AGENCE' ? 'text-gold-600' : 'text-gray-400'}`} />
+                          <span className="font-medium text-primary-800">En agence</span>
+                        </div>
+                        <span className="text-sm text-primary-600">Règlement sur place</span>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+                
+                {/* Kilométrage */}
+                <div className="space-y-3">
+                  <h3 className="font-semibold text-lg text-primary-900">Kilométrage</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <label className={`p-4 rounded-lg border cursor-pointer transition-all ${mileageOption === 'INCLUDED_340' ? 'border-gold-500 bg-gold-50 ring-1 ring-gold-500' : 'border-gray-200 hover:border-gold-300'}`}>
+                      <input
+                        type="radio"
+                        name="mileage_option"
+                        className="sr-only"
+                        checked={mileageOption === 'INCLUDED_340'}
+                        onChange={() => setMileageOption('INCLUDED_340')}
+                      />
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <Users className={`h-5 w-5 ${mileageOption === 'INCLUDED_340' ? 'text-gold-600' : 'text-gray-400'}`} />
+                          <span className="font-medium text-primary-800">340 km inclus</span>
+                        </div>
+                        <span className="text-sm text-primary-600">Au-delà: facturation standard</span>
+                      </div>
+                    </label>
+                    <label className={`p-4 rounded-lg border cursor-pointer transition-all ${mileageOption === 'UNLIMITED' ? 'border-gold-500 bg-gold-50 ring-1 ring-gold-500' : 'border-gray-200 hover:border-gold-300'}`}>
+                      <input
+                        type="radio"
+                        name="mileage_option"
+                        className="sr-only"
+                        checked={mileageOption === 'UNLIMITED'}
+                        onChange={() => setMileageOption('UNLIMITED')}
+                      />
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <Car className={`h-5 w-5 ${mileageOption === 'UNLIMITED' ? 'text-gold-600' : 'text-gray-400'}`} />
+                          <span className="font-medium text-primary-800">Kilométrage illimité</span>
+                        </div>
+                        <span className="text-sm text-primary-600">+50 MAD / jour</span>
+                      </div>
+                    </label>
+                  </div>
+                  {mileageOption === 'UNLIMITED' && (
+                    <div className="bg-gold-50 border border-gold-200 rounded-lg p-3 text-sm text-gold-800">
+                      Kilométrage illimité: +50 MAD / jour.
+                    </div>
+                  )}
+                </div>
+                
+                {/* Anciennes options (Chauffeur & Assurance) */}
+                <h3 className="font-semibold text-lg text-primary-900">Options et Services</h3>
                 {/* Chauffeur Option */}
                 <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 flex items-center justify-between">
                   <div className="flex items-center gap-3">
@@ -446,123 +536,119 @@ export default function VoitureDetailPage() {
             {step === 3 && (
               <div className="space-y-6">
                 <h2 className="text-2xl font-bold font-serif text-primary-900">3. Vos Informations</h2>
-                
-                {/* OCR Section */}
-                <div className="bg-gold-50 p-6 rounded-xl border border-gold-100 mb-6">
-                  <div className="flex items-center gap-3 mb-4">
-                    <Upload className="h-6 w-6 text-gold-600" />
-                    <h3 className="font-bold text-gold-900">Remplissage Automatique en téléchargeant les photos</h3>
-                  </div>
-                  <p className="text-sm text-gold-800 mb-4">Importez des photos de votre CIN et Permis pour remplir le formulaire automatiquement.</p>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gold-900 mb-2">Carte d'identité (CIN)</label>
-                      <input 
-                        type="file" 
-                        accept="image/*"
-                        onChange={(e) => handleOCR(e, 'cin')}
-                        className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-gold-100 file:text-gold-700 hover:file:bg-gold-200"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gold-900 mb-2">Permis de conduire</label>
-                      <input 
-                        type="file" 
-                        accept="image/*"
-                        onChange={(e) => handleOCR(e, 'permis')}
-                        className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-gold-100 file:text-gold-700 hover:file:bg-gold-200"
-                      />
-                    </div>
-                  </div>
-                  {ocrLoading && (
-                    <div className="mt-4">
-                      <div className="w-full bg-gold-200 rounded-full h-2.5">
-                        <div className="bg-gold-600 h-2.5 rounded-full" style={{ width: `${ocrProgress}%` }}></div>
-                      </div>
-                      <p className="text-xs text-gold-600 mt-1">Analyse en cours... {ocrProgress}%</p>
-                    </div>
-                  )}
-                </div>
 
                 {/* Form */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <input type="text" placeholder="Nom" value={reservation.nom} onChange={e => setReservation({...reservation, nom: e.target.value})} className="p-3 border rounded-lg text-black" />
-                  <input type="text" placeholder="Prénom" value={reservation.prenom} onChange={e => setReservation({...reservation, prenom: e.target.value})} className="p-3 border rounded-lg text-black" />
-                  <input type="email" placeholder="Email" value={reservation.email} onChange={e => setReservation({...reservation, email: e.target.value})} className="p-3 border rounded-lg text-black" />
-                  <input type="tel" placeholder="Téléphone" value={reservation.telephone} onChange={e => setReservation({...reservation, telephone: e.target.value})} className="p-3 border rounded-lg text-black" />
-                  <input type="text" placeholder="Numéro CIN" value={reservation.cinNumero} onChange={e => setReservation({...reservation, cinNumero: e.target.value})} className="p-3 border rounded-lg bg-gray-50 text-black" />
-                  <input type="text" placeholder="Numéro Permis" value={reservation.permisNumero} onChange={e => setReservation({...reservation, permisNumero: e.target.value})} className="p-3 border rounded-lg bg-gray-50 text-black" />
+                  <input type="text" placeholder="Nom *" value={reservation.nom} onChange={e => setReservation({...reservation, nom: e.target.value})} className="p-3 border rounded-lg text-black" required />
+                  <input type="text" placeholder="Prénom *" value={reservation.prenom} onChange={e => setReservation({...reservation, prenom: e.target.value})} className="p-3 border rounded-lg text-black" required />
+                  <input type="email" placeholder="Email *" value={reservation.email} onChange={e => setReservation({...reservation, email: e.target.value})} className="p-3 border rounded-lg text-black" required />
+                  <input type="tel" placeholder="Téléphone *" value={reservation.telephone} onChange={e => setReservation({...reservation, telephone: e.target.value})} className="p-3 border rounded-lg text-black" required />
                 </div>
 
                 <div className="flex gap-4 pt-4">
                   <button onClick={() => setStep(2)} className="px-6 py-2 border border-gray-300 rounded-lg text-primary-900">Retour</button>
-                  <button onClick={() => setStep(4)} className="flex-grow bg-primary-900 text-white py-2 rounded-lg hover:bg-primary-800 transition-colors">Continuer vers le paiement</button>
+                  <button 
+                    onClick={() => {
+                      if (!reservation.nom || !reservation.prenom || !reservation.email || !reservation.telephone) {
+                        alert('Veuillez remplir les champs Nom, Prénom, Email et Téléphone.');
+                        return;
+                      }
+                      setStep(4);
+                    }} 
+                    className="flex-grow bg-primary-900 text-white py-2 rounded-lg hover:bg-primary-800 transition-colors"
+                  >
+                    Continuer
+                  </button>
                 </div>
               </div>
             )}
 
-            {/* Step 4: Payment */}
+            {/* Step 4: Points de Fidélité */}
             {step === 4 && (
               <div className="space-y-6">
-                <h2 className="text-2xl font-bold font-serif text-primary-900">4. Paiement</h2>
+                <h2 className="text-2xl font-bold font-serif text-primary-900">4. Points de Fidélité (Optionnel)</h2>
                 
-                <div className="bg-cream-50 p-6 rounded-xl space-y-4">
-                   <h3 className="font-semibold mb-2 text-black">Mode de paiement</h3>
-                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                     <div 
-                       className={`p-4 border rounded-xl cursor-pointer flex items-center gap-3 ${reservation.modePaiement === 'en_ligne' ? 'border-gold-500 bg-gold-50' : ''}`}
-                       onClick={() => setReservation({...reservation, modePaiement: 'en_ligne'})}
-                     >
-                       <CreditCard className="h-6 w-6 text-black" />
-                       <div>
-                         <div className="font-bold text-black">Payer en ligne</div>
-                         <div className="text-sm text-black">Carte bancaire (Sécurisé)</div>
-                       </div>
-                     </div>
-                     <div 
-                       className={`p-4 border rounded-xl cursor-pointer flex items-center gap-3 ${reservation.modePaiement === 'sur_place' ? 'border-gold-500 bg-gold-50' : ''}`}
-                       onClick={() => setReservation({...reservation, modePaiement: 'sur_place'})}
-                     >
-                       <MapPin className="h-6 w-6 text-black" />
-                       <div>
-                         <div className="font-bold text-black">Payer sur place</div>
-                         <div className="text-sm text-black">À la réception de la voiture</div>
-                       </div>
-                     </div>
-                   </div>
+                {user && user.pointsFidelite > 0 ? (
+                  <div className="bg-gold-50 border border-gold-200 rounded-xl p-6">
+                    <div className="flex items-center gap-3 mb-4">
+                      <Gift className="h-6 w-6 text-gold-600" />
+                      <h3 className="font-bold text-gold-900">Utilisez vos points de fidélité</h3>
+                    </div>
+                    <p className="text-gold-800 mb-4">
+                      Vous avez <span className="font-bold">{user.pointsFidelite} points</span> disponibles. 
+                      Chaque point vaut 5 MAD de réduction.
+                    </p>
+                    
+                    <div className="bg-white rounded-lg p-4 border border-gold-200">
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="font-medium text-gray-700">Utiliser mes points de fidélité</span>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                          <input 
+                            type="checkbox" 
+                            checked={utiliserPoints} 
+                            onChange={(e) => setUtiliserPoints(e.target.checked)} 
+                            className="sr-only peer" 
+                          />
+                          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-gold-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gold-600"></div>
+                        </label>
+                      </div>
+                      
+                      {utiliserPoints && (
+                        <div className="text-sm text-gold-700 bg-gold-100 p-3 rounded-lg">
+                          <p>
+                            Points utilisés: <span className="font-bold">
+                              {Math.min(user.pointsFidelite, Math.floor(prixTotal / 5))} points
+                            </span>
+                          </p>
+                          <p>
+                            Réduction: <span className="font-bold">
+                              -{formatPrice(Math.min(user.pointsFidelite, Math.floor(prixTotal / 5)) * 5)}
+                            </span>
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-gray-50 border border-gray-200 rounded-xl p-6 text-center">
+                    <Gift className="h-12 w-12 text-gray-400 mx-auto mb-3" />
+                    <h3 className="font-bold text-gray-600 mb-2">Aucun point de fidélité disponible</h3>
+                    <p className="text-gray-500">
+                      Effectuez des réservations pour gagner des points et bénéficier de réductions futures !
+                    </p>
+                  </div>
+                )}
 
-                   {/* Formulaire Carte Bancaire (Simulation) */}
-                   {reservation.modePaiement === 'en_ligne' && (
-                     <div className="mt-6 p-4 border border-gray-200 rounded-lg bg-white animate-fade-in">
-                       <h4 className="font-semibold mb-4 flex items-center gap-2">
-                         <Shield className="h-4 w-4 text-green-600" />
-                         Paiement Sécurisé
-                       </h4>
-                       <div className="space-y-4">
-                         <div>
-                           <label className="block text-sm font-medium text-gray-700 mb-1">Numéro de carte</label>
-                           <input type="text" placeholder="0000 0000 0000 0000" className="w-full p-3 border rounded-lg text-black" maxLength={19} />
-                         </div>
-                         <div className="grid grid-cols-2 gap-4">
-                           <div>
-                             <label className="block text-sm font-medium text-gray-700 mb-1">Date d'expiration</label>
-                             <input type="text" placeholder="MM/AA" className="w-full p-3 border rounded-lg text-black" maxLength={5} />
-                           </div>
-                           <div>
-                             <label className="block text-sm font-medium text-gray-700 mb-1">CVC</label>
-                             <input type="text" placeholder="123" className="w-full p-3 border rounded-lg text-black" maxLength={3} />
-                           </div>
-                         </div>
-                         <div className="flex items-center gap-2 text-xs text-gray-500 mt-2">
-                           <Check className="h-3 w-3 text-green-500" />
-                           <span>Paiement crypté SSL 256-bit</span>
-                         </div>
-                       </div>
-                     </div>
-                   )}
+                <div className="flex gap-4 pt-4">
+                  <button onClick={() => setStep(3)} className="px-6 py-2 border border-gray-300 rounded-lg text-primary-900">Retour</button>
+                  <button 
+                    onClick={handleReservation}
+                    disabled={reservationEnCours}
+                    className="flex-grow bg-primary-900 text-white py-2 rounded-lg hover:bg-primary-800 transition-colors disabled:opacity-50"
+                  >
+                    {reservationEnCours ? 'Création...' : 'Créer la réservation'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Step 5: Payment */}
+            {step === 5 && createdBookingId && (
+              <div className="space-y-6">
+                <h2 className="text-2xl font-bold font-serif text-primary-900">5. Paiement</h2>
+                
+                {/* Récapitulatif de la réservation */}
+                <div className="bg-green-50 border border-green-200 rounded-xl p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Check className="h-5 w-5 text-green-600" />
+                    <h3 className="font-semibold text-green-900">Réservation créée avec succès</h3>
+                  </div>
+                  <p className="text-sm text-green-700">
+                    Réservation #{createdBookingId} - Montant à payer: <span className="font-semibold">{formatPrice(prixTotal)}</span>
+                  </p>
                 </div>
 
+                {/* Points de fidélité */}
                 {user && user.pointsFidelite > 0 && (
                   <div className="flex items-center justify-between bg-gold-50 p-4 rounded-lg border border-gold-200">
                     <div className="flex items-center gap-2">
@@ -576,14 +662,30 @@ export default function VoitureDetailPage() {
                   </div>
                 )}
 
+                {/* Composant de paiement CMI */}
+                <PaymentProcessor
+                  bookingId={createdBookingId}
+                  amount={prixTotal}
+                  currency="MAD"
+                  onSuccess={(paymentData) => {
+                    console.log('Paiement réussi:', paymentData);
+                    // La redirection sera gérée par le composant PaymentProcessor
+                  }}
+                  onError={(error) => {
+                    console.error('Erreur de paiement:', error);
+                    alert('Erreur lors du paiement: ' + error);
+                  }}
+                />
+
                 <div className="flex gap-4 pt-4">
-                  <button onClick={() => setStep(3)} className="px-6 py-2 border border-gray-300 rounded-lg text-primary-900">Retour</button>
                   <button 
-                    onClick={handleReservation}
-                    disabled={reservationEnCours}
-                    className="flex-grow bg-gold-500 text-white py-3 rounded-lg font-bold hover:bg-gold-600 transition-colors"
+                    onClick={() => {
+                      setStep(4);
+                      setCreatedBookingId(null);
+                    }} 
+                    className="px-6 py-2 border border-gray-300 rounded-lg text-primary-900"
                   >
-                    {reservationEnCours ? 'Traitement...' : `Confirmer la réservation (${formatPrice(prixTotal)})`}
+                    Retour
                   </button>
                 </div>
               </div>
@@ -604,7 +706,7 @@ export default function VoitureDetailPage() {
               <div className="space-y-3 text-sm text-black border-t pt-4">
                 <div className="flex justify-between">
                   <span>Prix par jour</span>
-                  <span className="text-black font-medium">{formatPrice(voiture.prixParJour)}</span>
+                  <span className="text-black font-medium">{formatPrice(voiture.prix_par_jour || voiture.prixParJour || 0)}</span>
                 </div>
                 {reservation.dateDebut && reservation.dateFin && (
                   <div className="flex justify-between">
