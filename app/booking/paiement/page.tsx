@@ -317,6 +317,14 @@ export default function BookingPaymentPage() {
             <div className="bg-white rounded-2xl border border-primary-100 p-6">
               <h3 className="text-lg font-semibold text-primary-900 mb-3">Récapitulatif</h3>
               <div className="text-sm text-primary-700">
+                <div className="mb-3">
+                  <img
+                    src={`/cars/${car?.id}.jpg`}
+                    alt={car?.modele || 'Voiture'}
+                    onError={(e) => (e.currentTarget.src = '/cars/default.jpg')}
+                    className="w-full h-48 object-cover rounded-lg border border-primary-100"
+                  />
+                </div>
                 <div className="mb-2">{car?.brand?.name} {car?.modele}</div>
                 <div>{numberOfDays} jours de location</div>
                 <div>Prise: {new Date(startDate).toLocaleString('fr-FR')}</div>

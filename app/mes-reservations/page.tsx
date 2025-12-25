@@ -156,17 +156,12 @@ export default function MesReservationsPage() {
                     {/* Image de la voiture */}
                     <div className="md:w-1/3 relative overflow-hidden">
                       <div className="relative h-64 md:h-full bg-primary-50">
-                        {reservation.voiture?.images && reservation.voiture.images.length > 0 ? (
-                          <img
-                            src={reservation.voiture.images[0]}
-                            alt={`${reservation.voiture.marque} ${reservation.voiture.modele}`}
-                            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center">
-                            <Car className="h-20 w-20 text-primary-200" />
-                          </div>
-                        )}
+                        <img
+                          src={`/cars/${reservation.voiture?.id}.jpg`}
+                          alt={`${reservation.voiture?.marque} ${reservation.voiture?.modele}`}
+                          onError={(e) => (e.currentTarget.src = '/cars/default.jpg')}
+                          className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                        />
                         <div className="absolute inset-0 bg-gradient-to-t from-primary-900/30 to-transparent"></div>
                       </div>
                     </div>

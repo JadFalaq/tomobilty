@@ -26,17 +26,12 @@ export default function VoitureCard({ voiture, showReserveButton = true }: Voitu
   return (
     <div className="group bg-white rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-500 overflow-hidden border border-primary-100 hover:border-gold-300 flex flex-col h-full">
       <div className="relative h-56 bg-primary-50 overflow-hidden">
-        {voiture.images && voiture.images.length > 0 ? (
-          <img
-            src={voiture.images[0]}
-            alt={`${voiture.marque} ${voiture.modele}`}
-            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <Car className="h-24 w-24 text-primary-200" />
-          </div>
-        )}
+        <img
+          src={`/cars/${voiture.id}.jpg`}
+          alt={`${voiture.marque} ${voiture.modele}`}
+          onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/cars/default.jpg'; }}
+          className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+        />
         <div className="absolute inset-0 bg-gradient-to-t from-primary-900/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
         <div className="absolute top-3 right-3">
           <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider shadow-md ${getStatutBadgeColor(voiture.statut)}`}>
