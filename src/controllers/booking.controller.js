@@ -42,9 +42,9 @@ function isOutsideBusinessHoursTZ(dateStr) {
  * Check car availability for specified dates
  */
 const checkAvailability = asyncHandler(async (req, res) => {
-  const { car_id, date_debut, date_fin } = req.body;
+  const { variante_car_id, date_debut, date_fin } = req.body;
 
-  if (!car_id || !date_debut || !date_fin) {
+  if (!variante_car_id || !date_debut || !date_fin) {
     return res.status(400).json({
       success: false,
       message: 'ID voiture, date de début et date de fin requis'
@@ -65,7 +65,7 @@ const checkAvailability = asyncHandler(async (req, res) => {
     return res.status(400).json({ success: false, message: 'Heures invalides', errors });
   }
 
-  const availability = await bookingService.checkAvailability(car_id, date_debut, date_fin);
+  const availability = await bookingService.checkAvailability(variante_car_id, date_debut, date_fin);
 
   res.json({
     success: true,
@@ -78,10 +78,10 @@ const checkAvailability = asyncHandler(async (req, res) => {
  * Calculate booking price with all fees and discounts
  */
 const calculatePrice = asyncHandler(async (req, res) => {
-  const { car_id, date_debut, date_fin, insurance_id, additional_drivers } = req.body;
+  const { variante_car_id, date_debut, date_fin, insurance_id, additional_drivers } = req.body;
   const userId = req.user?.id;
 
-  if (!car_id || !date_debut || !date_fin) {
+  if (!variante_car_id || !date_debut || !date_fin) {
     return res.status(400).json({
       success: false,
       message: 'ID voiture, date de début et date de fin requis'
@@ -89,7 +89,7 @@ const calculatePrice = asyncHandler(async (req, res) => {
   }
 
   const pricing = await bookingService.calculateBookingPrice({
-    carId: car_id,
+    carId: variante_car_id,
     dateDebut: date_debut,
     dateFin: date_fin,
     userId,
@@ -268,16 +268,9 @@ const completeRental = asyncHandler(async (req, res) => {
  * Add additional driver to booking
  */
 const addAdditionalDriver = asyncHandler(async (req, res) => {
-  const { bookingId } = req.params;
-  const driverData = req.body;
-  const userId = req.user.id;
-
-  const result = await bookingService.addAdditionalDriver(parseInt(bookingId), driverData, userId);
-
-  res.status(201).json({
-    success: true,
-    message: 'Conducteur additionnel ajouté avec succès',
-    data: result
+  return res.status(410).json({
+    success: false,
+    message: 'Fonction conducteur additionnel supprimée'
   });
 });
 
@@ -286,19 +279,9 @@ const addAdditionalDriver = asyncHandler(async (req, res) => {
  * Remove additional driver from booking
  */
 const removeAdditionalDriver = asyncHandler(async (req, res) => {
-  const { bookingId, driverId } = req.params;
-  const userId = req.user.id;
-
-  const result = await bookingService.removeAdditionalDriver(
-    parseInt(bookingId), 
-    parseInt(driverId), 
-    userId
-  );
-
-  res.json({
-    success: true,
-    message: 'Conducteur additionnel supprimé avec succès',
-    data: result
+  return res.status(410).json({
+    success: false,
+    message: 'Fonction conducteur additionnel supprimée'
   });
 });
 
@@ -501,6 +484,21 @@ const getQuote = asyncHandler(async (req, res) => {
   if (!carId || !start_date || !end_date) {
     return res.status(400).json({ success: false, message: 'Paramètres requis: carId, start_date, end_date' });
   }
+  const sd = new Date(start_date);
+  const ed = new Date(end_date);
+  if (isNaN(sd.getTime()) || isNaN(ed.getTime()) || ed <= sd) {
+    return res.status(400).json({ success: false, message: 'Heures invalides', errors: [{ field: 'end_date', msg: 'Doit être après la date de départ' }] });
+  }
+  const hoursErrors = [];
+  if (isOutsideBusinessHoursTZ(start_date)) {
+    hoursErrors.push({ field: 'start_date', msg: 'Doit être entre 09:00 et 17:00' });
+  }
+  if (isOutsideBusinessHoursTZ(end_date)) {
+    hoursErrors.push({ field: 'end_date', msg: 'Doit être entre 09:00 et 17:00' });
+  }
+  if (hoursErrors.length) {
+    return res.status(400).json({ success: false, message: 'Heures invalides', errors: hoursErrors });
+  }
   const car = await prisma.car.findUnique({ where: { id: parseInt(carId) } });
   if (!car) return res.status(404).json({ success: false, message: 'Voiture introuvable' });
   const protection = protectionId ? await prisma.protection.findUnique({ where: { id: parseInt(protectionId) } }) : null;
@@ -580,35 +578,11 @@ const getAvailableCars = asyncHandler(async (req, res) => {
     return res.status(400).json({ success: false, message: 'Heures invalides', errors: hoursErrors });
   }
 
-  const allowed = [
-    'Casablanca (Ville)',
-    'Casablanca – Aéroport Mohammed V (CMN)',
-    'Rabat (Ville)',
-    'Rabat – Aéroport Rabat-Salé (RBA)'
-  ];
-  if (pickup_location && !allowed.includes(pickup_location)) {
-    return res.status(400).json({ error: 'Lieu invalide' });
-  }
-
   const prisma = require('../config/prisma');
   const where = {
     statut: 'DISPONIBLE',
     disponible: true
   };
-
-  if (pickup_location) {
-    const cityMap = {
-      'Casablanca (Ville)': 'Casablanca',
-      'Casablanca – Aéroport Mohammed V (CMN)': 'Casablanca',
-      'Rabat (Ville)': 'Rabat',
-      'Rabat – Aéroport Rabat-Salé (RBA)': 'Rabat'
-    };
-    const city = cityMap[pickup_location] || pickup_location;
-    where.OR = [
-      { ville: { contains: city, mode: 'insensitive' } },
-      { agence_ville: { contains: city, mode: 'insensitive' } }
-    ];
-  }
 
   const cars = await prisma.car.findMany({
     where,
@@ -657,8 +631,8 @@ const getAllBookings = asyncHandler(async (req, res) => {
     where.user_id = parseInt(user_id);
   }
 
-  if (car_id) {
-    where.car_id = parseInt(car_id);
+  if (req.query.variante_car_id) {
+    where.variante_car_id = parseInt(req.query.variante_car_id);
   }
 
   if (date_from || date_to) {
@@ -811,26 +785,26 @@ const getBookingStatistics = asyncHandler(async (req, res) => {
     prisma.booking.count({
       where: {
         ...dateFilter,
-        status: { name: 'CONFIRMED' }
+        status: { name: 'EN_COURS' }
       }
     }),
     prisma.booking.count({
       where: {
         ...dateFilter,
-        status: { name: 'CANCELLED' }
+        status: { name: 'ANNULE' }
       }
     }),
     prisma.booking.aggregate({
       where: {
         ...dateFilter,
-        status: { name: 'CONFIRMED' }
+        status: { name: 'EN_COURS' }
       },
       _sum: { prix_total: true }
     }),
     prisma.booking.aggregate({
       where: {
         ...dateFilter,
-        status: { name: 'CONFIRMED' }
+        status: { name: 'EN_COURS' }
       },
       _avg: { prix_total: true }
     }),

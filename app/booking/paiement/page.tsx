@@ -1,16 +1,17 @@
 'use client';
 export const dynamic = 'force-dynamic';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import BookingPriceSummary from '@/components/BookingPriceSummary';
 import { voituresAPI, protectionsAPI, reservationsAPI } from '@/lib/api';
 
-export default function BookingPaymentPage() {
+function Content() {
   const params = useSearchParams();
   const carId = params.get('car_id') || '';
+  const varianteId = params.get('variante_car_id') || '';
   const startDate = params.get('start_date') || '';
   const endDate = params.get('end_date') || '';
   const paymentType = (params.get('payment_type') || 'ONLINE') as 'ONLINE' | 'AGENCE';
@@ -83,7 +84,7 @@ export default function BookingPaymentPage() {
       if (!bookingId) {
         try {
           const payload = {
-            car_id: parseInt(carId),
+            ...(varianteId ? { variante_car_id: parseInt(varianteId) } : { car_id: parseInt(carId) }),
             date_debut: startDate,
             date_fin: endDate,
             mode_paiement: 'EN_AGENCE',
@@ -149,8 +150,6 @@ export default function BookingPaymentPage() {
   };
 
   return (
-    <div className="min-h-screen bg-cream-50 flex flex-col">
-      <Navbar />
       <main className="flex-grow container mx-auto px-4 py-8">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-serif font-bold text-primary-900">REVOIR VOTRE RÉSERVATION</h1>
@@ -225,7 +224,7 @@ export default function BookingPaymentPage() {
                 <button className="text-gray-700 underline" onClick={()=>{}}>Détails du prix</button>
               </div>
               <div className="text-sm text-primary-700 mt-2">
-                Caution remboursable: Une caution supplémentaire de {(quote?.caution_amount ?? (car?.caution ?? 0))} MAD sera prélevée…
+                Caution remboursable: Une caution supplémentaire de {(quote?.caution_amount ?? 0)} MAD sera prélevée…
               </div>
               <div className="mt-3">
                 <label className="flex items-center gap-2 text-sm text-gray-900">
@@ -342,6 +341,16 @@ export default function BookingPaymentPage() {
           </div>
         </div>
       </main>
+  );
+}
+
+export default function BookingPaymentPage() {
+  return (
+    <div className="min-h-screen bg-cream-50 flex flex-col">
+      <Navbar />
+      <Suspense fallback={<div className="p-8">Chargement…</div>}>
+        <Content />
+      </Suspense>
       <Footer />
     </div>
   );

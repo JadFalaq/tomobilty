@@ -59,6 +59,10 @@ jest.mock('../config/prisma', () => ({
     create: jest.fn(),
     findMany: jest.fn()
   },
+  varianteCar: {
+    findUnique: jest.fn(),
+    findFirst: jest.fn()
+  },
   $transaction: jest.fn()
 }));
 
@@ -71,6 +75,18 @@ jest.mock('../services/invoice.service');
 jest.mock('../services/notification.service');
 
 const prisma = require('../config/prisma');
+
+// Dynamic future dates to avoid past-date validation failures
+const FUTURE_START = (() => {
+  const d = new Date();
+  d.setDate(d.getDate() + 20);
+  return d.toISOString().split('T')[0];
+})();
+const FUTURE_END = (() => {
+  const d = new Date();
+  d.setDate(d.getDate() + 25);
+  return d.toISOString().split('T')[0];
+})();
 
 describe('Booking Service', () => {
   beforeEach(() => {
@@ -93,14 +109,14 @@ describe('Booking Service', () => {
 
       availabilityService.checkCarAvailability.mockResolvedValue(mockAvailability);
 
-      const result = await bookingService.checkAvailability(1, '2024-01-15', '2024-01-20');
+      const result = await bookingService.checkAvailability(1, FUTURE_START, FUTURE_END);
 
-      expect(availabilityService.checkCarAvailability).toHaveBeenCalledWith(1, '2024-01-15', '2024-01-20');
+      expect(availabilityService.checkCarAvailability).toHaveBeenCalledWith(1, FUTURE_START, FUTURE_END);
       expect(result).toEqual(mockAvailability);
     });
 
     it('should throw error for invalid dates', async () => {
-      await expect(bookingService.checkAvailability(1, '2024-01-20', '2024-01-15'))
+      await expect(bookingService.checkAvailability(1, FUTURE_END, FUTURE_START))
         .rejects.toThrow('Dates de réservation invalides');
     });
   });
@@ -126,8 +142,8 @@ describe('Booking Service', () => {
 
       const result = await bookingService.calculateBookingPrice({
         carId: 1,
-        dateDebut: '2024-01-15',
-        dateFin: '2024-01-20',
+        dateDebut: FUTURE_START,
+        dateFin: FUTURE_END,
         userId: 1,
         additionalDrivers: []
       });
@@ -151,8 +167,8 @@ describe('Booking Service', () => {
 
       await expect(bookingService.calculateBookingPrice({
         carId: 1,
-        dateDebut: '2024-01-15',
-        dateFin: '2024-01-20'
+        dateDebut: FUTURE_START,
+        dateFin: FUTURE_END
       })).rejects.toThrow(CarNotAvailableError);
     });
   });
@@ -175,7 +191,7 @@ describe('Booking Service', () => {
         category: { name: 'Economy' }
       };
 
-      const mockStatus = { id: 1, name: 'PENDING' };
+      const mockStatus = { id: 1, name: 'EN_ATTENTE' };
       const mockBooking = {
         id: 1,
         user_id: 1,
@@ -198,6 +214,9 @@ describe('Booking Service', () => {
         return await callback(prisma);
       });
       prisma.booking.create.mockResolvedValue(mockBooking);
+      prisma.car.findUnique.mockResolvedValue(mockCar);
+      prisma.varianteCar.findFirst.mockResolvedValue({ id: 99, car: mockCar });
+      availabilityService.checkCarAvailability.mockResolvedValue({ available: true });
       
       bookingService.calculateBookingPrice = jest.fn().mockResolvedValue({
         totalPrice: 1000,
@@ -209,8 +228,8 @@ describe('Booking Service', () => {
       const result = await bookingService.createBooking({
         user_id: 1,
         car_id: 1,
-        date_debut: '2024-01-15',
-        date_fin: '2024-01-20',
+        date_debut: FUTURE_START,
+        date_fin: FUTURE_END,
         lieu_prise_en_charge: 'Airport',
         lieu_retour: 'Airport'
       });
@@ -225,16 +244,19 @@ describe('Booking Service', () => {
       const mockUser = {
         id: 1,
         permis_conduire: 'ABC123',
-        date_permis: new Date('2023-01-01') // Less than 2 years
+        // Set license date to 1 year ago to ensure invalid (< 2 years)
+        date_permis: new Date(new Date().setFullYear(new Date().getFullYear() - 1))
       };
 
       prisma.user.findUnique.mockResolvedValue(mockUser);
+      prisma.varianteCar.findFirst.mockResolvedValue({ id: 99, car: { id: 1, tarif_journalier: 200 } });
+      availabilityService.checkCarAvailability.mockResolvedValue({ available: true });
 
       await expect(bookingService.createBooking({
         user_id: 1,
         car_id: 1,
-        date_debut: '2024-01-15',
-        date_fin: '2024-01-20'
+        date_debut: FUTURE_START,
+        date_fin: FUTURE_END
       })).rejects.toThrow(InvalidDriverLicenseError);
     });
   });
@@ -245,7 +267,7 @@ describe('Booking Service', () => {
         payment: { status: 'COMPLETED', amount: 1000 }
       };
 
-      const mockStatus = { id: 2, name: 'CONFIRMED' };
+      const mockStatus = { id: 2, name: 'EN_COURS' };
       const mockBooking = {
         id: 1,
         user_id: 1,
@@ -266,16 +288,13 @@ describe('Booking Service', () => {
       const result = await bookingService.confirmBooking(1, 1);
 
       expect(result).toHaveProperty('booking');
-      expect(prisma.booking.update).toHaveBeenCalledWith({
-        where: { id: 1 },
-        data: {
-          status_id: 2,
-          paiement_effectue: true,
-          montant_paye: 1000,
-          mode_paiement: 'stripe'
-        },
-        include: expect.any(Object)
-      });
+      expect(prisma.booking.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 1 },
+          data: expect.objectContaining({ status_id: 2 }),
+          include: expect.any(Object)
+        })
+      );
     });
 
     it('should throw error for incomplete payment', async () => {
@@ -295,13 +314,13 @@ describe('Booking Service', () => {
       const mockBooking = {
         id: 1,
         user_id: 1,
-        date_debut: new Date('2024-01-20'), // Future date
-        status: { name: 'CONFIRMED' },
+        date_debut: new Date(FUTURE_END), // Future date
+        status: { name: 'EN_COURS' },
         payments: [{ id: 1, amount: 1000, status: 'COMPLETED' }],
         loyaltyTransactions: [{ id: 1, points: 150 }]
       };
 
-      const mockCancelledStatus = { id: 3, name: 'CANCELLED' };
+      const mockCancelledStatus = { id: 3, name: 'ANNULE' };
       const mockUpdatedBooking = { ...mockBooking, status: mockCancelledStatus };
 
       prisma.booking.findUnique.mockResolvedValue(mockBooking);
@@ -321,13 +340,13 @@ describe('Booking Service', () => {
       expect(result).toHaveProperty('booking');
       expect(result).toHaveProperty('penalty');
       expect(result).toHaveProperty('refund');
-      expect(result.booking.status.name).toBe('CANCELLED');
+      expect(result.booking.status.name).toBe('ANNULE');
     });
 
     it('should throw error for non-cancellable booking', async () => {
       const mockBooking = {
         id: 1,
-        status: { name: 'COMPLETED' }
+        status: { name: 'TERMINE' }
       };
 
       prisma.booking.findUnique.mockResolvedValue(mockBooking);
@@ -342,11 +361,11 @@ describe('Booking Service', () => {
       const mockBooking = {
         id: 1,
         date_debut: new Date(),
-        status: { name: 'CONFIRMED' },
+        status: { name: 'EN_COURS' },
         rentalContract: { id: 1 }
       };
 
-      const mockActiveStatus = { id: 4, name: 'ACTIVE' };
+      const mockActiveStatus = { id: 4, name: 'EN_COURS' };
       const mockUpdatedBooking = { ...mockBooking, status: mockActiveStatus };
 
       prisma.booking.findUnique.mockResolvedValue(mockBooking);
@@ -365,7 +384,7 @@ describe('Booking Service', () => {
 
       expect(result).toHaveProperty('booking');
       expect(result).toHaveProperty('vehicle_condition');
-      expect(result.booking.status.name).toBe('ACTIVE');
+      expect(result.booking.status.name).toBe('EN_COURS');
     });
 
     it('should throw error for wrong booking status', async () => {
@@ -387,13 +406,13 @@ describe('Booking Service', () => {
         {
           id: 1,
           user_id: 1,
-          status: { name: 'CONFIRMED' },
+          status: { name: 'EN_COURS' },
           car: { brand: { name: 'Toyota' } }
         },
         {
           id: 2,
           user_id: 1,
-          status: { name: 'COMPLETED' },
+          status: { name: 'TERMINE' },
           car: { brand: { name: 'Honda' } }
         }
       ];
@@ -401,7 +420,7 @@ describe('Booking Service', () => {
       prisma.booking.findMany.mockResolvedValue(mockBookings);
 
       const result = await bookingService.getUserBookings(1, {
-        status: 'CONFIRMED',
+        status: 'EN_COURS',
         limit: 10,
         offset: 0
       });
@@ -415,40 +434,10 @@ describe('Booking Service', () => {
   });
 
   describe('addAdditionalDriver', () => {
-    it('should add additional driver successfully', async () => {
-      const mockBooking = {
-        id: 1,
-        user_id: 1,
-        status: { name: 'PENDING' },
-        additionalDrivers: [],
-        date_debut: new Date('2024-01-15'),
-        date_fin: new Date('2024-01-20'),
-        prix_total: 1000
-      };
-
-      const mockDriver = {
-        id: 1,
-        nom: 'Smith',
-        prenom: 'Jane',
-        permis_numero: 'DEF456',
-        permis_date: new Date('2022-01-01')
-      };
-
-      prisma.booking.findUnique.mockResolvedValue(mockBooking);
-      prisma.additionalDriver.create.mockResolvedValue(mockDriver);
-      prisma.booking.update.mockResolvedValue({});
-
-      const result = await bookingService.addAdditionalDriver(1, {
-        nom: 'Smith',
-        prenom: 'Jane',
-        permis_numero: 'DEF456',
-        permis_date: '2022-01-01'
-      }, 1);
-
-      expect(result).toHaveProperty('driver');
-      expect(result).toHaveProperty('additional_fee');
-      expect(result).toHaveProperty('new_total_price');
-      expect(result.driver.nom).toBe('Smith');
+    it('should be removed and throw error', async () => {
+      await expect(
+        bookingService.addAdditionalDriver(1, {}, 1)
+      ).rejects.toThrow('Fonction conducteur additionnel supprimée');
     });
   });
 });

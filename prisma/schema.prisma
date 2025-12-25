@@ -19,14 +19,10 @@ model User {
   phone_verified             Boolean            @default(false)
   email_verification_token   String?            @db.VarChar(255)
   email_verification_expires DateTime?
-  adresse                    String?
-  permis_conduire            String?
   date_creation              DateTime           @default(now())
   date_modification          DateTime           @default(now()) @updatedAt
-  additionalDrivers          AdditionalDriver[]
   bookings                   Booking[]
   chatConversations          ChatConversation[]
-  documents                  Document[]
   invoices                   Invoice[]
   loyaltyAccount             LoyaltyAccount?
   notifications              Notification[]
@@ -160,36 +156,38 @@ model Car {
   brand_id          Int
   category_id       Int
   modele            String        @db.VarChar(50)
-  annee             Int
-  immatriculation   String        @unique @db.VarChar(20)
-  couleur           String?       @db.VarChar(30)
-  type_carburant    enum_carburant
   transmission      String?       @db.VarChar(20)
   nombre_places     Int?
   nombre_portes     Int?
-  climatisation     Boolean       @default(true)
-  gps               Boolean       @default(false)
   prix_par_jour     Decimal       @db.Decimal(10, 2)
-  caution           Decimal       @default(0) @db.Decimal(10, 2)
-  kilometrage       Int           @default(0)
   statut            CarStatus     @default(DISPONIBLE)
-  agence_nom        String?       @db.VarChar(100)
-  agence_ville      String?       @db.VarChar(100)
-  agence_adresse    String?       @db.VarChar(255)
-  agence_telephone  String?       @db.VarChar(20)
-  caracteristiques  String?
-  description       String?
-  ville             String        @db.VarChar(100)
-  disponible        Boolean       @default(true)
   date_creation     DateTime      @default(now())
   date_modification DateTime      @default(now()) @updatedAt
-  bookings          Booking[]
   brand             CarBrand      @relation(fields: [brand_id], references: [id])
   category          CarCategory   @relation(fields: [category_id], references: [id])
   images            CarImage[]
-  maintenance       Maintenance[]
+  variantes         VarianteCar[]
 
   @@map("car")
+}
+
+model VarianteCar {
+  id               Int            @id @default(autoincrement())
+  car_id           Int
+  immatriculation  String         @unique @db.VarChar(20)
+  couleur          String?        @db.VarChar(30)
+  type_carburant   enum_carburant
+  kilometrage      Int            @default(0)
+  description      String?
+  ville            String         @db.VarChar(100)
+  created_at       DateTime       @default(now())
+  updated_at       DateTime       @default(now()) @updatedAt
+
+  car              Car            @relation(fields: [car_id], references: [id], onDelete: Cascade)
+  maintenances     Maintenance[]
+  bookings         Booking[]
+
+  @@map("variante_car")
 }
 
 model CarBrand {
@@ -228,32 +226,38 @@ model CarImage {
 model Booking {
   id                   Int                  @id @default(autoincrement())
   user_id              Int
-  car_id               Int
-  date_debut           DateTime             @db.Date
-  date_fin             DateTime             @db.Date
+  variante_car_id      Int
+  date_debut           DateTime
+  date_fin             DateTime
   lieu_prise_en_charge String?              @db.VarChar(255)
   lieu_retour          String?              @db.VarChar(255)
   prix_total           Decimal              @db.Decimal(10, 2)
   caution_payee        Decimal              @default(0) @db.Decimal(10, 2)
   status_id            Int                  @default(1)
+  status_name          BookingStatusName    @default(EN_ATTENTE)
   mode_paiement        PaymentMode?         @default(EN_LIGNE)
   protection_id        Int?
   protection           Protection?          @relation(fields: [protection_id], references: [id])
-  paiement_effectue    Boolean              @default(false)
-  montant_paye         Decimal              @default(0) @db.Decimal(10, 2)
   metadata             String?
   date_creation        DateTime             @default(now())
   date_modification    DateTime             @default(now()) @updatedAt
-  additionalDrivers    AdditionalDriver[]
-  car                  Car                  @relation(fields: [car_id], references: [id], onDelete: Cascade)
+  varianteCar          VarianteCar          @relation(fields: [variante_car_id], references: [id], onDelete: Cascade)
   status               BookingStatus        @relation(fields: [status_id], references: [id])
   user                 User                 @relation(fields: [user_id], references: [id])
   invoices             Invoice[]
   loyaltyTransactions  LoyaltyTransaction[]
   payments             Payment[]
-  rentalContract       RentalContract?
 
   @@map("booking")
+}
+
+enum BookingStatusName {
+  EN_ATTENTE
+  EN_COURS
+  TERMINE
+  ANNULE
+
+  @@map("booking_status_name")
 }
 
 model BookingStatus {
@@ -266,48 +270,7 @@ model BookingStatus {
   @@map("booking_status")
 }
 
-model AdditionalDriver {
-  id            Int      @id @default(autoincrement())
-  booking_id    Int
-  user_id       Int
-  nom           String   @db.VarChar(100)
-  prenom        String   @db.VarChar(100)
-  permis_numero String   @db.VarChar(50)
-  permis_date   DateTime @db.Date
-  created_at    DateTime @default(now())
-  booking       Booking  @relation(fields: [booking_id], references: [id], onDelete: Cascade)
-  user          User     @relation(fields: [user_id], references: [id])
-
-  @@map("additional_driver")
-}
-
-model RentalContract {
-  id              Int              @id @default(autoincrement())
-  booking_id      Int              @unique
-  template_id     Int
-  contract_number String           @unique @db.VarChar(50)
-  contract_data   String
-  pdf_path        String?          @db.VarChar(500)
-  signed_at       DateTime?
-  created_at      DateTime         @default(now())
-  updated_at      DateTime         @default(now()) @updatedAt
-  booking         Booking          @relation(fields: [booking_id], references: [id], onDelete: Cascade)
-  template        ContractTemplate @relation(fields: [template_id], references: [id])
-
-  @@map("rental_contract")
-}
-
-model ContractTemplate {
-  id         Int              @id @default(autoincrement())
-  name       String           @db.VarChar(100)
-  template   String
-  version    String           @db.VarChar(10)
-  is_active  Boolean          @default(true)
-  created_at DateTime         @default(now())
-  contracts  RentalContract[]
-
-  @@map("contract_template")
-}
+// Removed tables: AdditionalDriver, RentalContract, ContractTemplate
 
 model Payment {
   id                  Int           @id @default(autoincrement())
@@ -361,16 +324,7 @@ model Insurance {
   @@map("insurance")
 }
 
-model Driver {
-  id            Int      @id @default(autoincrement())
-  nom           String   @db.VarChar(100)
-  prenom        String   @db.VarChar(100)
-  permis_numero String   @db.VarChar(50)
-  permis_date   DateTime @db.Date
-  created_at    DateTime @default(now())
-
-  @@map("driver")
-}
+// Removed table: Driver
 
 model Review {
   id          Int      @id @default(autoincrement())
@@ -387,7 +341,7 @@ model Review {
 
 model Maintenance {
   id               Int               @id @default(autoincrement())
-  car_id           Int
+  variante_car_id  Int
   maintenance_type MaintenanceType
   description      String
   cost             Decimal?          @db.Decimal(10, 2)
@@ -395,31 +349,12 @@ model Maintenance {
   completed_date   DateTime?         @db.Date
   status           MaintenanceStatus @default(SCHEDULED)
   created_at       DateTime          @default(now())
-  car              Car               @relation(fields: [car_id], references: [id], onDelete: Cascade)
+  varianteCar      VarianteCar       @relation(fields: [variante_car_id], references: [id], onDelete: Cascade)
 
   @@map("maintenance")
 }
 
-model Document {
-  id                Int            @id @default(autoincrement())
-  user_id           Int?
-  booking_id        Int?
-  filename          String?        @db.VarChar(255)
-  original_filename String?        @db.VarChar(255)
-  file_path         String?        @db.VarChar(500)
-  file_type         String?        @db.VarChar(50)
-  file_size         Int?
-  ocr_content       String?
-  ocr_confidence    Decimal?       @db.Decimal(5, 2)
-  document_type     String?        @db.VarChar(50)
-  status            DocumentStatus @default(PROCESSING)
-  metadata          String?
-  created_at        DateTime       @default(now())
-  updated_at        DateTime       @default(now()) @updatedAt
-  user              User?          @relation(fields: [user_id], references: [id])
-
-  @@map("document")
-}
+// Removed table: Document
 
 model Admin {
   id          Int      @id @default(autoincrement())

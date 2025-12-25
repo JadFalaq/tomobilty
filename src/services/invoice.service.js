@@ -20,16 +20,19 @@ const generateInvoice = async (bookingId, paymentId) => {
       where: { id: bookingId },
       include: {
         user: true,
-        car: {
+        varianteCar: {
           include: {
-            brand: true,
-            category: true
+            car: {
+              include: {
+                brand: true,
+                category: true
+              }
+            }
           }
         },
         payments: {
           where: { id: paymentId }
-        },
-        additionalDrivers: true
+        }
       }
     });
 
@@ -60,7 +63,7 @@ const generateInvoice = async (bookingId, paymentId) => {
         status: payment.status === 'COMPLETED' ? 'PAID' : 'PENDING',
         metadata: JSON.stringify({
           booking_reference: `BK-${new Date().getFullYear()}-${bookingId.toString().padStart(6, '0')}`,
-          car_details: `${booking.car.brand.name} ${booking.car.modele}`,
+          car_details: `${booking.varianteCar.car.brand.name} ${booking.varianteCar.car.modele}`,
           rental_period: `${booking.date_debut.toLocaleDateString('fr-FR')} - ${booking.date_fin.toLocaleDateString('fr-FR')}`,
           ...invoiceData.metadata
         })
@@ -121,31 +124,19 @@ const generateInvoice = async (bookingId, paymentId) => {
  */
 const calculateInvoiceData = async (booking, payment) => {
   const numberOfDays = Math.ceil((new Date(booking.date_fin) - new Date(booking.date_debut)) / (1000 * 60 * 60 * 24));
-  const dailyRate = parseFloat(booking.car.tarif_journalier);
+  const dailyRate = parseFloat(booking.varianteCar.car.prix_par_jour);
   
   const items = [
     {
       code: 'LOC',
-      description: `Location ${booking.car.brand.name} ${booking.car.modele}`,
+      description: `Location ${booking.varianteCar.car.brand.name} ${booking.varianteCar.car.modele}`,
       quantity: numberOfDays,
       unitPrice: dailyRate,
       amount: dailyRate * numberOfDays
     }
   ];
 
-  // Add additional drivers if any
-  if (booking.additionalDrivers && booking.additionalDrivers.length > 0) {
-    const driverFee = 50; // 50 MAD per driver per day
-    const totalDriverFee = booking.additionalDrivers.length * driverFee * numberOfDays;
-    
-    items.push({
-      code: 'COND',
-      description: `Conducteurs additionnels (${booking.additionalDrivers.length})`,
-      quantity: numberOfDays,
-      unitPrice: booking.additionalDrivers.length * driverFee,
-      amount: totalDriverFee
-    });
-  }
+  // Conducteurs additionnels supprimés
 
   // Add insurance if applicable
   // This would need to be calculated based on actual insurance selection
@@ -180,7 +171,7 @@ const calculateInvoiceData = async (booking, payment) => {
     metadata: {
       number_of_days: numberOfDays,
       daily_rate: dailyRate,
-      additional_drivers: booking.additionalDrivers.length
+      additional_drivers: 0
     }
   };
 };
@@ -204,9 +195,11 @@ const getInvoice = async (invoiceId) => {
         },
         booking: {
           include: {
-            car: {
+            varianteCar: {
               include: {
-                brand: true
+                car: {
+                  include: { brand: true }
+                }
               }
             }
           }
@@ -263,9 +256,11 @@ const getUserInvoices = async (userId, filters = {}) => {
       include: {
         booking: {
           include: {
-            car: {
+            varianteCar: {
               include: {
-                brand: true
+                car: {
+                  include: { brand: true }
+                }
               }
             }
           }

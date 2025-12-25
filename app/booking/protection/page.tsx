@@ -2,6 +2,7 @@
 export const dynamic = 'force-dynamic';
 
 import { useSearchParams, useRouter } from 'next/navigation';
+import { Suspense } from 'react';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import { useEffect, useMemo, useState } from 'react';
@@ -10,10 +11,11 @@ import { protectionsAPI } from '@/lib/api';
 import BookingPriceSummary from '@/components/BookingPriceSummary';
 import { voituresAPI } from '@/lib/api';
 
-export default function BookingProtectionPage() {
+function Content() {
   const params = useSearchParams();
   const router = useRouter();
   const carId = params.get('car_id') || '';
+  const varianteId = params.get('variante_car_id') || '';
   const startDate = params.get('start_date') || '';
   const endDate = params.get('end_date') || '';
   const paymentType = params.get('payment_type') || 'ONLINE';
@@ -92,6 +94,7 @@ export default function BookingProtectionPage() {
   const continueToPayment = () => {
     const q = new URLSearchParams({
       car_id: carId,
+      variante_car_id: varianteId,
       start_date: startDate,
       end_date: endDate,
       payment_type: paymentType,
@@ -103,8 +106,6 @@ export default function BookingProtectionPage() {
   };
 
   return (
-    <div className="min-h-screen bg-cream-50 flex flex-col">
-      <Navbar />
       <main className="flex-grow container mx-auto px-4 py-8">
         <div className="max-w-4xl mx-auto">
           <h1 className="text-2xl md:text-3xl font-serif font-bold text-primary-900 mb-6">
@@ -186,6 +187,16 @@ export default function BookingProtectionPage() {
           </div>
         </div>
       </main>
+  );
+}
+
+export default function BookingProtectionPage() {
+  return (
+    <div className="min-h-screen bg-cream-50 flex flex-col">
+      <Navbar />
+      <Suspense fallback={<div className="p-8">Chargement…</div>}>
+        <Content />
+      </Suspense>
       <Footer />
     </div>
   );

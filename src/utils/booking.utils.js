@@ -27,20 +27,39 @@ const validateBookingDates = (dateDebut, dateFin) => {
   const start = new Date(dateDebut);
   const end = new Date(dateFin);
   const now = new Date();
-  
-  // Remove time component for date comparison
-  now.setHours(0, 0, 0, 0);
-  start.setHours(0, 0, 0, 0);
-  end.setHours(0, 0, 0, 0);
-  
+  const BUSINESS_START_HOUR = 9;   // 09:00
+  const BUSINESS_END_HOUR = 17;   // 17:00
+
+  // Validate chronological order and future start
+  if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+    throw new InvalidBookingDatesError(dateDebut, dateFin);
+  }
   if (start >= end) {
     throw new InvalidBookingDatesError(dateDebut, dateFin);
   }
-  
   if (start < now) {
     throw new InvalidBookingDatesError(dateDebut, dateFin);
   }
-  
+
+  // Enforce business hours for pickup and return
+  const startHour = start.getHours();
+  const endHour = end.getHours();
+  const startMinutes = start.getMinutes();
+  const endMinutes = end.getMinutes();
+
+  // If input is date-only string (no time component), skip business hours check
+  const inputStartHasTime = typeof dateDebut === 'string' ? dateDebut.includes('T') : true;
+  const inputEndHasTime = typeof dateFin === 'string' ? dateFin.includes('T') : true;
+
+  const isStartWithinHours = !inputStartHasTime || startHour > BUSINESS_START_HOUR ||
+    (startHour === BUSINESS_START_HOUR && startMinutes >= 0);
+  const isEndWithinHours = !inputEndHasTime || endHour < BUSINESS_END_HOUR ||
+    (endHour === BUSINESS_END_HOUR && endMinutes === 0);
+
+  if (!isStartWithinHours || !isEndWithinHours) {
+    throw new InvalidBookingDatesError(dateDebut, dateFin);
+  }
+
   return true;
 };
 

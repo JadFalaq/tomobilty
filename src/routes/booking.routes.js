@@ -39,10 +39,7 @@ router.post('/calculate-price',
 );
 
 // GET /api/cars/available
-router.get('/cars/available', 
-  validateDateRange,
-  bookingController.getAvailableCars
-);
+// Deprecated: use GET /api/cars/available from car.controller
 
 /**
  * Protected routes (User must be authenticated)
@@ -78,7 +75,7 @@ router.get('/:bookingId',
 router.put('/:bookingId', 
   verifyToken,
   checkBookingOwnership,
-  validateBookingStatus(['PENDING']),
+  validateBookingStatus(['EN_ATTENTE']),
   sanitizeBookingInput,
   logBookingOperation('UPDATE_BOOKING'),
   bookingController.updateBooking
@@ -88,7 +85,7 @@ router.put('/:bookingId',
 router.delete('/:bookingId', 
   verifyToken,
   checkBookingOwnership,
-  validateBookingStatus(['PENDING', 'CONFIRMED']),
+  validateBookingStatus(['EN_ATTENTE', 'EN_COURS']),
   logBookingOperation('CANCEL_BOOKING'),
   bookingController.cancelBooking
 );
@@ -98,7 +95,7 @@ router.post('/:bookingId/start',
   verifyToken,
   requireAdmin, // Only staff can start rentals
   checkBookingOwnership,
-  validateBookingStatus(['CONFIRMED']),
+  validateBookingStatus(['EN_COURS']),
   logBookingOperation('START_RENTAL'),
   bookingController.startRental
 );
@@ -108,7 +105,7 @@ router.post('/:bookingId/complete',
   verifyToken,
   requireAdmin, // Only staff can complete rentals
   checkBookingOwnership,
-  validateBookingStatus(['ACTIVE']),
+  validateBookingStatus(['EN_COURS']),
   logBookingOperation('COMPLETE_RENTAL'),
   bookingController.completeRental
 );
@@ -138,7 +135,7 @@ router.post('/:bookingId/confirm-agence',
 router.post('/:bookingId/additional-driver', 
   verifyToken,
   checkBookingOwnership,
-  validateBookingStatus(['PENDING']),
+  validateBookingStatus(['EN_ATTENTE']),
   validateDriverData,
   validateAdditionalDriverLicense,
   checkDriverBlacklist,
@@ -152,7 +149,7 @@ router.post('/:bookingId/additional-driver',
 router.delete('/:bookingId/additional-driver/:driverId', 
   verifyToken,
   checkBookingOwnership,
-  validateBookingStatus(['PENDING']),
+  validateBookingStatus(['EN_ATTENTE']),
   logBookingOperation('REMOVE_ADDITIONAL_DRIVER'),
   bookingController.removeAdditionalDriver
 );

@@ -12,7 +12,6 @@ const paymentsController = require('../controllers/admin/payments.admin.controll
 const invoicesController = require('../controllers/admin/invoices.admin.controller');
 const reviewsController = require('../controllers/admin/reviews.admin.controller');
 const maintenanceController = require('../controllers/admin/maintenance.admin.controller');
-const documentsController = require('../controllers/admin/documents.admin.controller');
 const notificationsController = require('../controllers/admin/notifications.admin.controller');
 const promotionsController = require('../controllers/admin/promotions.admin.controller');
 const loyaltyController = require('../controllers/admin/loyalty.admin.controller');
@@ -94,12 +93,7 @@ router.get('/booking-statuses', miscController.listBookingStatuses);
 router.post('/booking-statuses', auditLog('CREATE', 'BookingStatus'), miscController.createBookingStatus);
 router.put('/booking-statuses/:id', captureOldValues('bookingStatus'), auditLog('UPDATE', 'BookingStatus'), miscController.updateBookingStatus);
 
-// ============================================
-// ADDITIONAL DRIVERS
-// ============================================
-router.get('/additional-drivers', miscController.listAdditionalDrivers);
-router.post('/additional-drivers', auditLog('CREATE', 'AdditionalDriver'), miscController.createAdditionalDriver);
-router.delete('/additional-drivers/:id', captureOldValues('additionalDriver'), auditLog('DELETE', 'AdditionalDriver'), miscController.deleteAdditionalDriver);
+// Removed: Additional Drivers endpoints
 
 // ============================================
 // PAYMENTS MANAGEMENT
@@ -119,19 +113,9 @@ router.post('/invoices', auditLog('CREATE', 'Invoice'), invoicesController.creat
 router.put('/invoices/:id', captureOldValues('invoice'), auditLog('UPDATE', 'Invoice'), invoicesController.updateInvoice);
 router.delete('/invoices/:id', captureOldValues('invoice'), auditLog('DELETE', 'Invoice'), invoicesController.deleteInvoice);
 
-// ============================================
-// RENTAL CONTRACTS
-// ============================================
-router.get('/rental-contracts', miscController.listRentalContracts);
-router.get('/rental-contracts/:id', miscController.getRentalContractById);
+// Removed: Rental Contracts endpoints
 
-// ============================================
-// CONTRACT TEMPLATES
-// ============================================
-router.get('/contract-templates', miscController.listContractTemplates);
-router.post('/contract-templates', auditLog('CREATE', 'ContractTemplate'), miscController.createContractTemplate);
-router.put('/contract-templates/:id', captureOldValues('contractTemplate'), auditLog('UPDATE', 'ContractTemplate'), miscController.updateContractTemplate);
-router.delete('/contract-templates/:id', captureOldValues('contractTemplate'), auditLog('DELETE', 'ContractTemplate'), miscController.deleteContractTemplate);
+// Removed: Contract Templates endpoints
 
 // ============================================
 // REVIEWS MANAGEMENT
@@ -151,14 +135,7 @@ router.post('/maintenance', auditLog('CREATE', 'Maintenance'), maintenanceContro
 router.put('/maintenance/:id', captureOldValues('maintenance'), auditLog('UPDATE', 'Maintenance'), maintenanceController.updateMaintenance);
 router.delete('/maintenance/:id', captureOldValues('maintenance'), auditLog('DELETE', 'Maintenance'), maintenanceController.deleteMaintenance);
 
-// ============================================
-// DOCUMENTS MANAGEMENT
-// ============================================
-router.get('/documents', documentsController.listDocuments);
-router.get('/documents/:id', documentsController.getDocumentById);
-router.post('/documents', auditLog('CREATE', 'Document'), documentsController.createDocument);
-router.put('/documents/:id', captureOldValues('document'), auditLog('UPDATE', 'Document'), documentsController.updateDocument);
-router.delete('/documents/:id', captureOldValues('document'), auditLog('DELETE', 'Document'), documentsController.deleteDocument);
+// Removed: Documents endpoints
 
 // ============================================
 // NOTIFICATIONS MANAGEMENT
@@ -221,13 +198,7 @@ router.post('/insurances', auditLog('CREATE', 'Insurance'), miscController.creat
 router.put('/insurances/:id', captureOldValues('insurance'), auditLog('UPDATE', 'Insurance'), miscController.updateInsurance);
 router.delete('/insurances/:id', captureOldValues('insurance'), auditLog('DELETE', 'Insurance'), miscController.deleteInsurance);
 
-// ============================================
-// DRIVERS MANAGEMENT
-// ============================================
-router.get('/drivers', miscController.listDrivers);
-router.post('/drivers', auditLog('CREATE', 'Driver'), miscController.createDriver);
-router.put('/drivers/:id', captureOldValues('driver'), auditLog('UPDATE', 'Driver'), miscController.updateDriver);
-router.delete('/drivers/:id', captureOldValues('driver'), auditLog('DELETE', 'Driver'), miscController.deleteDriver);
+// Removed: Drivers endpoints
 
 // ============================================
 // OAUTH ACCOUNTS

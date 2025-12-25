@@ -699,7 +699,12 @@ export default function VoitureDetailPage() {
               <h3 className="text-xl font-bold font-serif mb-4 text-black">Récapitulatif</h3>
               
               <div className="mb-4">
-                <img src={voiture.images?.[0] || '/images/placeholder-car.jpg'} alt={voiture.modele} className="w-full h-32 object-cover rounded-lg mb-2" />
+                <img
+                  src={`/cars/${voiture.id}.jpg`}
+                  alt={voiture.modele}
+                  onError={(e) => (e.currentTarget.src = '/cars/default.jpg')}
+                  className="w-full h-32 object-cover rounded-lg mb-2"
+                />
                 <h4 className="font-bold text-lg text-black">{voiture.marque} {voiture.modele}</h4>
               </div>
 

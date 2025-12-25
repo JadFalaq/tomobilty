@@ -60,14 +60,21 @@ const calculateBookingPrice = async (params) => {
     // Validate dates
     validateBookingDates(dateDebut, dateFin);
 
-    // Get car details
-    const car = await prisma.car.findUnique({
+    // Get car details (carId may be variante_car_id, resolve to car)
+    let car = await prisma.car.findUnique({
       where: { id: carId },
-      include: {
-        brand: true,
-        category: true
-      }
+      include: { brand: true, category: true }
     });
+    if (!car) {
+      const variante = await prisma.varianteCar.findUnique({
+        where: { id: carId },
+        include: { car: { include: { brand: true, category: true } } }
+      });
+      if (!variante) {
+        throw new Error('Voiture introuvable');
+      }
+      car = variante.car;
+    }
 
     if (!car) {
       throw new Error('Voiture introuvable');
@@ -148,9 +155,9 @@ const calculateBookingPrice = async (params) => {
       pointsToEarn,
       car: {
         id: car.id,
-        brand: car.brand.name,
+        brand: car.brand?.name || null,
         model: car.modele,
-        category: car.category.name,
+        category: car.category?.name || null,
         image: car.images?.[0]?.url || null
       },
       insurance: insurance ? {
@@ -183,6 +190,7 @@ const createBooking = async (bookingData) => {
   try {
     const {
       user_id,
+      variante_car_id,
       car_id,
       date_debut,
       date_fin,
@@ -190,7 +198,6 @@ const createBooking = async (bookingData) => {
       lieu_retour,
       insurance_id,
       protection_id,
-      additional_drivers = [],
       use_loyalty_points = 0
     } = bookingData;
 
@@ -214,36 +221,73 @@ const createBooking = async (bookingData) => {
       }
     }
 
-    // Validate additional drivers
-    if (additional_drivers.length > 3) {
-      throw new AdditionalDriverLimitError(additional_drivers.length, 3);
-    }
-
-    for (const driver of additional_drivers) {
-      const driverValidation = validateAdditionalDriver(driver);
-      if (!driverValidation.isValid) {
-        throw new InvalidDriverLicenseError(`${driver.nom} ${driver.prenom}`, driverValidation.reason);
-      }
-    }
+    // Additional drivers feature removed
 
     // Calculate pricing
+    // Resolve carId from variante
+    // Resolve variante ID (supports legacy car_id)
+    let variante = null;
+    let resolvedVarianteId = null;
+    if (variante_car_id) {
+      variante = await prisma.varianteCar.findUnique({
+        where: { id: parseInt(variante_car_id) },
+        include: { car: true }
+      });
+      if (!variante) throw new Error('Variante introuvable');
+      resolvedVarianteId = variante.id;
+    } else if (car_id) {
+      const variants = await prisma.varianteCar.findMany({
+        where: { car_id: parseInt(car_id) },
+        include: { car: true }
+      });
+      if (!variants || variants.length === 0) throw new Error('Variante introuvable pour cette voiture');
+      const scored = [];
+      for (const v of variants) {
+        const avail = await availabilityService.checkCarAvailability(v.id, date_debut, date_fin);
+        if (!avail.available) continue;
+        const lastActive = await prisma.booking.findFirst({
+          where: {
+            variante_car_id: v.id,
+            status_name: { in: ['EN_ATTENTE', 'EN_COURS'] }
+          },
+          orderBy: { date_fin: 'desc' },
+          select: { date_fin: true }
+        });
+        scored.push({
+          variante: v,
+          lastEnd: lastActive?.date_fin || null
+        });
+      }
+      if (scored.length === 0) {
+        throw new CarNotAvailableError(car_id, date_debut, date_fin, 'Aucune variante disponible');
+      }
+      scored.sort((a, b) => {
+        if (a.lastEnd === null && b.lastEnd === null) return 0;
+        if (a.lastEnd === null) return -1;
+        if (b.lastEnd === null) return 1;
+        return new Date(a.lastEnd) - new Date(b.lastEnd);
+      });
+      variante = scored[0].variante;
+      resolvedVarianteId = variante.id;
+    } else {
+      throw new Error('variante_car_id requis');
+    }
     const pricing = await calculateBookingPrice({
-      carId: car_id,
+      carId: variante.car_id,
       dateDebut: date_debut,
       dateFin: date_fin,
       userId: user_id,
       insuranceId: insurance_id,
-      additionalDrivers: additional_drivers,
       protectionId: protection_id
     });
 
     const availability = await availabilityService.checkCarAvailability(
-      parseInt(car_id),
+      parseInt(resolvedVarianteId),
       date_debut,
       date_fin
     );
     if (!availability.available) {
-      throw new CarNotAvailableError(car_id, date_debut, date_fin, availability.reason || 'Indisponible');
+      throw new CarNotAvailableError(resolvedVarianteId, date_debut, date_fin, availability.reason || 'Indisponible');
     }
 
     // Apply loyalty points if requested
@@ -270,20 +314,33 @@ const createBooking = async (bookingData) => {
 
     // Get booking status
     const pendingStatus = await prisma.bookingStatus.findFirst({
-      where: { name: 'PENDING' }
+      where: { name: 'EN_ATTENTE' }
     });
 
     if (!pendingStatus) {
-      throw new Error('Status PENDING non trouvé. Veuillez initialiser les statuts de réservation.');
+      throw new Error('Status EN_ATTENTE non trouvé. Veuillez initialiser les statuts de réservation.');
     }
 
     // Create booking in transaction
     const result = await prisma.$transaction(async (tx) => {
+      const conflict = await tx.booking.findFirst({
+        where: {
+          variante_car_id: parseInt(resolvedVarianteId),
+          AND: [
+            { date_debut: { lte: new Date(date_fin) } },
+            { date_fin: { gte: new Date(date_debut) } },
+            { status_name: { in: ['EN_ATTENTE', 'EN_COURS'] } }
+          ]
+        }
+      });
+      if (conflict) {
+        throw new CarNotAvailableError(resolvedVarianteId, date_debut, date_fin, 'Conflit de réservation');
+      }
       // Create booking
       const booking = await tx.booking.create({
         data: {
           user_id,
-          car_id,
+          variante_car_id: parseInt(resolvedVarianteId),
           date_debut: new Date(date_debut),
           date_fin: new Date(date_fin),
           lieu_prise_en_charge,
@@ -293,17 +350,17 @@ const createBooking = async (bookingData) => {
           status_id: pendingStatus.id,
           mode_paiement: (bookingData.mode_paiement === 'EN_LIGNE' || bookingData.mode_paiement === 'EN_AGENCE') ? bookingData.mode_paiement : 'EN_LIGNE',
           protection_id: protection_id || null,
-          paiement_effectue: false,
-          montant_paye: 0
+          metadata: JSON.stringify({})
         },
         include: {
           user: true,
-          car: {
+          varianteCar: {
             include: {
-              brand: true,
-              category: true,
-              images: {
-                take: 1
+              car: {
+                include: {
+                  brand: true,
+                  category: true
+                }
               }
             }
           },
@@ -311,45 +368,65 @@ const createBooking = async (bookingData) => {
         }
       });
 
-      // Create additional drivers
-      if (additional_drivers.length > 0) {
-        await tx.additionalDriver.createMany({
-          data: additional_drivers.map(driver => ({
-            booking_id: booking.id,
-            user_id: user_id,
-            nom: driver.nom,
-            prenom: driver.prenom,
-            permis_numero: driver.permis_numero,
-            permis_date: new Date(driver.permis_date)
-          }))
-        });
-      }
-
       return booking;
     });
 
-    // Create payment session
-    const paymentSession = await paymentService.createPaymentSession(result.id, {
-      user: result.user,
-      car: result.car,
-      pricing: {
-        totalPrice: finalPrice
-      },
-      metadata: {
-        booking_reference: generateBookingReference(result.id),
-        date_debut: new Date(date_debut).toLocaleDateString('fr-FR'),
-        date_fin: new Date(date_fin).toLocaleDateString('fr-FR'),
-        points_used: use_loyalty_points,
-        points_discount: pointsDiscount,
-        protection_id,
-        agency_fee_percent: agencyFeePercent * 100,
-        agency_fee_amount: agencyFeeAmount,
-        subtotal,
-        mileage_option: bookingData.mileage_option || 'KM_340',
-        mileage_fee_per_day: mileageFeePerDay,
-        mileage_fee_total: mileageFeeTotal
-      }
-    });
+    let paymentSession = null;
+    if (bookingData.mode_paiement === 'EN_AGENCE') {
+      const agencyPayment = await prisma.payment.create({
+        data: {
+          booking_id: result.id,
+          user_id: result.user.id,
+          amount: finalPrice,
+          currency: 'MAD',
+          status: 'CREATED',
+          provider: 'agence',
+          metadata: JSON.stringify({
+            booking_reference: generateBookingReference(result.id),
+            date_debut: new Date(date_debut).toLocaleDateString('fr-FR'),
+            date_fin: new Date(date_fin).toLocaleDateString('fr-FR'),
+            points_used: use_loyalty_points,
+            points_discount: pointsDiscount,
+            protection_id,
+            agency_fee_percent: agencyFeePercent * 100,
+            agency_fee_amount: agencyFeeAmount,
+            subtotal,
+            mileage_option: bookingData.mileage_option || 'KM_340',
+            mileage_fee_per_day: mileageFeePerDay,
+            mileage_fee_total: mileageFeeTotal
+          })
+        }
+      });
+      paymentSession = {
+        payment_id: agencyPayment.id,
+        provider: 'agence',
+        status: 'CREATED',
+        amount: finalPrice,
+        currency: 'MAD'
+      };
+    } else {
+      paymentSession = await paymentService.createPaymentSession(result.id, {
+        user: result.user,
+        car: result.varianteCar?.car || null,
+        pricing: {
+          totalPrice: finalPrice
+        },
+        metadata: {
+          booking_reference: generateBookingReference(result.id),
+          date_debut: new Date(date_debut).toLocaleDateString('fr-FR'),
+          date_fin: new Date(date_fin).toLocaleDateString('fr-FR'),
+          points_used: use_loyalty_points,
+          points_discount: pointsDiscount,
+          protection_id,
+          agency_fee_percent: agencyFeePercent * 100,
+          agency_fee_amount: agencyFeeAmount,
+          subtotal,
+          mileage_option: bookingData.mileage_option || 'KM_340',
+          mileage_fee_per_day: mileageFeePerDay,
+          mileage_fee_total: mileageFeeTotal
+        }
+      });
+    }
 
     // Send booking confirmation notification
     try {
@@ -369,7 +446,7 @@ const createBooking = async (bookingData) => {
         deposit
       },
       payment: paymentSession,
-      additional_drivers: additional_drivers
+      additional_drivers: []
     };
 
   } catch (error) {
@@ -395,31 +472,31 @@ const confirmBooking = async (bookingId, paymentId) => {
 
     // Get confirmed status
     const confirmedStatus = await prisma.bookingStatus.findFirst({
-      where: { name: 'CONFIRMED' }
+      where: { name: 'EN_COURS' }
     });
 
     if (!confirmedStatus) {
-      throw new Error('Status CONFIRMED non trouvé');
+      throw new Error('Status EN_COURS non trouvé');
     }
 
-    // Update booking status
-    const booking = await prisma.booking.update({
-      where: { id: bookingId },
-      data: {
-        status_id: confirmedStatus.id,
-        paiement_effectue: true,
-        montant_paye: paymentStatus.payment.amount,
-      },
-      include: {
-        user: true,
-        car: {
-          include: {
-            brand: true
+  // Update booking status
+  const booking = await prisma.booking.update({
+    where: { id: bookingId },
+    data: {
+      status_id: confirmedStatus.id
+    },
+    include: {
+      user: true,
+      varianteCar: {
+        include: {
+          car: {
+            include: { brand: true }
           }
-        },
-        additionalDrivers: true
-      }
-    });
+        }
+      },
+      status: true
+    }
+  });
 
     // Execute post-payment workflow
     const results = await executePostPaymentWorkflow(booking, paymentId);
@@ -547,9 +624,9 @@ const startRental = async (bookingId, contractData) => {
       throw new BookingNotFoundError(bookingId);
     }
 
-    // Verify status is CONFIRMED
-    if (booking.status.name !== 'CONFIRMED') {
-      throw new InvalidBookingStatusError(booking.status.name, 'CONFIRMED');
+    // Verify status is EN_COURS
+    if (booking.status.name !== 'EN_COURS') {
+      throw new InvalidBookingStatusError(booking.status.name, 'EN_COURS');
     }
 
     // Verify date is today or later
@@ -562,13 +639,13 @@ const startRental = async (bookingId, contractData) => {
       throw new Error('La location ne peut pas commencer avant la date prévue');
     }
 
-    // Get active status
+    // Get in-progress status
     const activeStatus = await prisma.bookingStatus.findFirst({
-      where: { name: 'ACTIVE' }
+      where: { name: 'EN_COURS' }
     });
 
     if (!activeStatus) {
-      throw new Error('Status ACTIVE non trouvé');
+      throw new Error('Status EN_COURS non trouvé');
     }
 
     // Update booking status
@@ -579,9 +656,11 @@ const startRental = async (bookingId, contractData) => {
       },
       include: {
         user: true,
-        car: {
+        varianteCar: {
           include: {
-            brand: true
+            car: {
+              include: { brand: true }
+            }
           }
         },
         status: true
@@ -636,9 +715,11 @@ const completeRental = async (bookingId, returnData) => {
       include: {
         status: true,
         user: true,
-        car: {
+        varianteCar: {
           include: {
-            brand: true
+            car: {
+              include: { brand: true }
+            }
           }
         }
       }
@@ -648,18 +729,18 @@ const completeRental = async (bookingId, returnData) => {
       throw new BookingNotFoundError(bookingId);
     }
 
-    // Verify status is ACTIVE
-    if (booking.status.name !== 'ACTIVE') {
-      throw new InvalidBookingStatusError(booking.status.name, 'ACTIVE');
+    // Verify status is EN_COURS
+    if (booking.status.name !== 'EN_COURS') {
+      throw new InvalidBookingStatusError(booking.status.name, 'EN_COURS');
     }
 
     // Get completed status
     const completedStatus = await prisma.bookingStatus.findFirst({
-      where: { name: 'COMPLETED' }
+      where: { name: 'TERMINE' }
     });
 
     if (!completedStatus) {
-      throw new Error('Status COMPLETED non trouvé');
+      throw new Error('Status TERMINE non trouvé');
     }
 
     // Update booking status
@@ -670,9 +751,11 @@ const completeRental = async (bookingId, returnData) => {
       },
       include: {
         user: true,
-        car: {
+        varianteCar: {
           include: {
-            brand: true
+            car: {
+              include: { brand: true }
+            }
           }
         },
         status: true
@@ -707,7 +790,7 @@ const completeRental = async (bookingId, returnData) => {
 
     // Release car (make it available again)
     try {
-      await availabilityService.releaseCarFromBooking(booking.car_id, bookingId);
+      await availabilityService.releaseCarFromBooking(booking.variante_car_id, bookingId);
     } catch (releaseError) {
       console.warn('Could not release car:', releaseError.message);
     }
@@ -755,9 +838,11 @@ const cancelBooking = async (bookingId, reason, cancellationPolicy = null) => {
       include: {
         status: true,
         user: true,
-        car: {
+        varianteCar: {
           include: {
-            brand: true
+            car: {
+              include: { brand: true }
+            }
           }
         },
         payments: {
@@ -774,7 +859,7 @@ const cancelBooking = async (bookingId, reason, cancellationPolicy = null) => {
     }
 
     // Check if booking can be cancelled
-    const allowedStatuses = ['PENDING', 'CONFIRMED'];
+    const allowedStatuses = ['EN_ATTENTE', 'EN_COURS'];
     if (!allowedStatuses.includes(booking.status.name)) {
       throw new BookingCancellationError(bookingId, `Impossible d'annuler une réservation avec le status ${booking.status.name}`);
     }
@@ -788,11 +873,11 @@ const cancelBooking = async (bookingId, reason, cancellationPolicy = null) => {
 
     // Get cancelled status
     const cancelledStatus = await prisma.bookingStatus.findFirst({
-      where: { name: 'CANCELLED' }
+      where: { name: 'ANNULE' }
     });
 
     if (!cancelledStatus) {
-      throw new Error('Status CANCELLED non trouvé');
+      throw new Error('Status ANNULE non trouvé');
     }
 
     // Update booking status
@@ -803,9 +888,11 @@ const cancelBooking = async (bookingId, reason, cancellationPolicy = null) => {
       },
       include: {
         user: true,
-        car: {
+        varianteCar: {
           include: {
-            brand: true
+            car: {
+              include: { brand: true }
+            }
           }
         },
         status: true
@@ -901,12 +988,16 @@ const getUserBookings = async (userId, filters = {}) => {
     const bookings = await prisma.booking.findMany({
       where: whereClause,
       include: {
-        car: {
+        varianteCar: {
           include: {
-            brand: true,
-            category: true,
-            images: {
-              take: 1
+            car: {
+              include: {
+                brand: true,
+                category: true,
+                images: {
+                  take: 1
+                }
+              }
             }
           }
         },
@@ -923,7 +1014,6 @@ const getUserBookings = async (userId, filters = {}) => {
           },
           take: 1
         },
-        rentalContract: true,
         loyaltyTransactions: true
       },
       orderBy: {
@@ -937,7 +1027,7 @@ const getUserBookings = async (userId, filters = {}) => {
       ...booking,
       booking_reference: generateBookingReference(booking.id),
       can_modify: canModifyBooking(booking).canModify,
-      can_cancel: ['PENDING', 'CONFIRMED'].includes(booking.status.name)
+      can_cancel: ['EN_ATTENTE', 'EN_COURS'].includes(booking.status.name)
     }));
 
   } catch (error) {
@@ -966,15 +1056,18 @@ const getBookingDetails = async (bookingId, userId) => {
             telephone: true
           }
         },
-        car: {
+        varianteCar: {
           include: {
-            brand: true,
-            category: true,
-            images: true
+            car: {
+              include: {
+                brand: true,
+                category: true,
+                images: true
+              }
+            }
           }
         },
         status: true,
-        additionalDrivers: true,
         payments: {
           orderBy: {
             created_at: 'asc'
@@ -985,7 +1078,6 @@ const getBookingDetails = async (bookingId, userId) => {
             created_at: 'desc'
           }
         },
-        rentalContract: true,
         loyaltyTransactions: {
           orderBy: {
             created_at: 'desc'
@@ -1005,11 +1097,10 @@ const getBookingDetails = async (bookingId, userId) => {
 
     // Calculate price breakdown
     const priceBreakdown = await calculateBookingPrice({
-      carId: booking.car_id,
+      carId: booking.varianteCar.car_id,
       dateDebut: booking.date_debut,
       dateFin: booking.date_fin,
-      userId: booking.user_id,
-      additionalDrivers: booking.additionalDrivers
+      userId: booking.user_id
     });
 
     return {
@@ -1017,7 +1108,7 @@ const getBookingDetails = async (bookingId, userId) => {
       booking_reference: generateBookingReference(booking.id),
       priceBreakdown,
       can_modify: canModifyBooking(booking).canModify,
-      can_cancel: ['PENDING', 'CONFIRMED'].includes(booking.status.name),
+      can_cancel: ['EN_ATTENTE', 'EN_COURS'].includes(booking.status.name),
       cancellation_policy: calculateCancellationPenalty(booking.date_debut)
     };
 
@@ -1041,7 +1132,8 @@ const updateBooking = async (bookingId, updates, userId) => {
       where: { id: bookingId },
       include: {
         status: true,
-        user: true
+        user: true,
+        varianteCar: true
       }
     });
 
@@ -1084,16 +1176,16 @@ const updateBooking = async (bookingId, updates, userId) => {
       validateBookingDates(newStartDate, newEndDate);
       
       // Check availability for new dates
-      const availability = await checkAvailability(booking.car_id, newStartDate, newEndDate);
+      const availability = await checkAvailability(booking.variante_car_id, newStartDate, newEndDate);
       if (!availability.available) {
-        throw new CarNotAvailableError(booking.car_id, newStartDate, newEndDate, availability.reason);
+        throw new CarNotAvailableError(booking.variante_car_id, newStartDate, newEndDate, availability.reason);
       }
     }
 
     // Recalculate price if dates changed
     if (priceRecalculation) {
       const newPricing = await calculateBookingPrice({
-        carId: booking.car_id,
+        carId: booking.varianteCar.car_id,
         dateDebut: updateData.date_debut || booking.date_debut,
         dateFin: updateData.date_fin || booking.date_fin,
         userId: booking.user_id
@@ -1109,13 +1201,14 @@ const updateBooking = async (bookingId, updates, userId) => {
       data: updateData,
       include: {
         user: true,
-        car: {
+        varianteCar: {
           include: {
-            brand: true
+            car: {
+              include: { brand: true }
+            }
           }
         },
         status: true,
-        additionalDrivers: true
       }
     });
 
@@ -1136,81 +1229,8 @@ const updateBooking = async (bookingId, updates, userId) => {
  * @param {number} userId - User ID (for authorization)
  * @returns {Promise<Object>} Updated booking with new driver
  */
-const addAdditionalDriver = async (bookingId, driverData, userId) => {
-  try {
-    // Get booking
-    const booking = await prisma.booking.findUnique({
-      where: { id: bookingId },
-      include: {
-        status: true,
-        additionalDrivers: true
-      }
-    });
-
-    if (!booking) {
-      throw new BookingNotFoundError(bookingId);
-    }
-
-    // Verify user ownership
-    if (booking.user_id !== userId) {
-      throw new Error('Accès non autorisé à cette réservation');
-    }
-
-    // Check if booking can be modified
-    const modificationCheck = canModifyBooking(booking);
-    if (!modificationCheck.canModify) {
-      throw new Error(modificationCheck.reason);
-    }
-
-    // Check driver limit
-    if (booking.additionalDrivers.length >= 3) {
-      throw new AdditionalDriverLimitError(booking.additionalDrivers.length, 3);
-    }
-
-    // Validate driver data
-    const driverValidation = validateAdditionalDriver(driverData);
-    if (!driverValidation.isValid) {
-      throw new InvalidDriverLicenseError(`${driverData.nom} ${driverData.prenom}`, driverValidation.reason);
-    }
-
-    // Add driver
-    const newDriver = await prisma.additionalDriver.create({
-      data: {
-        booking_id: bookingId,
-        user_id: userId,
-        nom: driverData.nom,
-        prenom: driverData.prenom,
-        permis_numero: driverData.permis_numero,
-        permis_date: new Date(driverData.permis_date)
-      }
-    });
-
-    // Recalculate price with additional driver
-    const numberOfDays = Math.ceil((new Date(booking.date_fin) - new Date(booking.date_debut)) / (1000 * 60 * 60 * 24));
-    const driverFee = 50 * numberOfDays; // 50 MAD per day per driver
-    const newTotalPrice = parseFloat(booking.prix_total) + driverFee;
-
-    // Update booking price
-    await prisma.booking.update({
-      where: { id: bookingId },
-      data: {
-        prix_total: newTotalPrice,
-        caution_payee: Math.round(newTotalPrice * 0.20 * 100) / 100
-      }
-    });
-
-    console.log(`✅ Additional driver added to booking ${bookingId}`);
-
-    return {
-      driver: newDriver,
-      additional_fee: driverFee,
-      new_total_price: newTotalPrice
-    };
-
-  } catch (error) {
-    console.error('Error adding additional driver:', error);
-    throw error;
-  }
+const addAdditionalDriver = async () => {
+  throw new Error('Fonction conducteur additionnel supprimée');
 };
 
 /**
@@ -1220,74 +1240,8 @@ const addAdditionalDriver = async (bookingId, driverData, userId) => {
  * @param {number} userId - User ID (for authorization)
  * @returns {Promise<Object>} Updated booking details
  */
-const removeAdditionalDriver = async (bookingId, driverId, userId) => {
-  try {
-    // Get booking and driver
-    const booking = await prisma.booking.findUnique({
-      where: { id: bookingId },
-      include: {
-        status: true,
-        additionalDrivers: true
-      }
-    });
-
-    if (!booking) {
-      throw new BookingNotFoundError(bookingId);
-    }
-
-    // Verify user ownership
-    if (booking.user_id !== userId) {
-      throw new Error('Accès non autorisé à cette réservation');
-    }
-
-    // Check if booking can be modified
-    const modificationCheck = canModifyBooking(booking);
-    if (!modificationCheck.canModify) {
-      throw new Error(modificationCheck.reason);
-    }
-
-    // Find and remove driver
-    const driver = await prisma.additionalDriver.findFirst({
-      where: {
-        id: driverId,
-        booking_id: bookingId
-      }
-    });
-
-    if (!driver) {
-      throw new Error('Conducteur additionnel introuvable');
-    }
-
-    await prisma.additionalDriver.delete({
-      where: { id: driverId }
-    });
-
-    // Recalculate price without this driver
-    const numberOfDays = Math.ceil((new Date(booking.date_fin) - new Date(booking.date_debut)) / (1000 * 60 * 60 * 24));
-    const driverFee = 50 * numberOfDays; // 50 MAD per day per driver
-    const newTotalPrice = parseFloat(booking.prix_total) - driverFee;
-
-    // Update booking price
-    await prisma.booking.update({
-      where: { id: bookingId },
-      data: {
-        prix_total: newTotalPrice,
-        caution_payee: Math.round(newTotalPrice * 0.20 * 100) / 100
-      }
-    });
-
-    console.log(`✅ Additional driver removed from booking ${bookingId}`);
-
-    return {
-      removed_driver: driver,
-      fee_reduction: driverFee,
-      new_total_price: newTotalPrice
-    };
-
-  } catch (error) {
-    console.error('Error removing additional driver:', error);
-    throw error;
-  }
+const removeAdditionalDriver = async () => {
+  throw new Error('Fonction conducteur additionnel supprimée');
 };
 
 module.exports = {

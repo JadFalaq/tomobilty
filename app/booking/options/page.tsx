@@ -2,6 +2,7 @@
 export const dynamic = 'force-dynamic';
 
 import { useSearchParams, useRouter } from 'next/navigation';
+import { Suspense } from 'react';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import { useState, useMemo, useEffect } from 'react';
@@ -9,17 +10,16 @@ import { CreditCard, Shield, Car } from 'lucide-react';
 import BookingPriceSummary from '@/components/BookingPriceSummary';
 import { voituresAPI } from '@/lib/api';
 
-export default function BookingOptionsPage() {
+function Content() {
   const params = useSearchParams();
   const router = useRouter();
   const carId = params.get('car_id') || '';
   const startDate = params.get('start_date') || '';
   const endDate = params.get('end_date') || '';
-
+  const varianteId = params.get('variante_car_id') || '';
   const [paymentType, setPaymentType] = useState<'ONLINE' | 'AGENCE'>('ONLINE');
   const [mileageOption, setMileageOption] = useState<'KM_340' | 'KM_UNLIMITED'>('KM_340');
   const [carPricePerDay, setCarPricePerDay] = useState<number>(0);
-
   useEffect(()=> {
     const load = async () => {
       if (!carId) return;
@@ -34,24 +34,21 @@ export default function BookingOptionsPage() {
     };
     load();
   }, [carId]);
-
   const canProceed = useMemo(() => {
     return !!carId && !!startDate && !!endDate;
   }, [carId, startDate, endDate]);
-
   const numberOfDays = useMemo(() => {
     if (!startDate || !endDate) return 0;
     const diff = Math.ceil((new Date(endDate).getTime() - new Date(startDate).getTime())/(1000*60*60*24));
     return diff > 0 ? diff : 0;
   }, [startDate, endDate]);
-
   const subtotalEstimate = useMemo(()=> carPricePerDay * numberOfDays, [carPricePerDay, numberOfDays]);
   const agencyFee = useMemo(()=> paymentType === 'AGENCE' ? Math.round(subtotalEstimate * 0.025 * 100)/100 : 0, [paymentType, subtotalEstimate]);
   const mileageFeePerDay = useMemo(()=> mileageOption === 'KM_UNLIMITED' ? 50 : 0, [mileageOption]);
-
   const goNext = () => {
     const q = new URLSearchParams({
       car_id: carId,
+      variante_car_id: varianteId,
       start_date: startDate,
       end_date: endDate,
       payment_type: paymentType,
@@ -59,10 +56,7 @@ export default function BookingOptionsPage() {
     }).toString();
     router.push(`/booking/protection?${q}`);
   };
-
   return (
-    <div className="min-h-screen bg-cream-50 flex flex-col">
-      <Navbar />
       <main className="flex-grow container mx-auto px-4 py-8">
         <div className="max-w-3xl mx-auto bg-white rounded-2xl shadow-lg border border-primary-100 p-6">
           <h1 className="text-2xl font-serif font-bold text-primary-900 mb-6">Options de paiement</h1>
@@ -163,6 +157,16 @@ export default function BookingOptionsPage() {
           </div>
         </div>
       </main>
+  );
+}
+
+export default function BookingOptionsPage() {
+  return (
+    <div className="min-h-screen bg-cream-50 flex flex-col">
+      <Navbar />
+      <Suspense fallback={<div className="p-8">Chargement…</div>}>
+        <Content />
+      </Suspense>
       <Footer />
     </div>
   );

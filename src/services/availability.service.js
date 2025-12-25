@@ -18,21 +18,22 @@ const { datesOverlap } = require('../utils/booking.utils');
  * @param {number} excludeBookingId - Booking ID to exclude from check (for updates)
  * @returns {Promise<Object>} Availability result
  */
-const checkCarAvailability = async (carId, dateDebut, dateFin, excludeBookingId = null) => {
+const checkCarAvailability = async (varianteCarId, dateDebut, dateFin, excludeBookingId = null) => {
   try {
     const startDate = new Date(dateDebut);
     const endDate = new Date(dateFin);
 
     // Check if car exists and is active
-    const car = await prisma.car.findUnique({
-      where: { id: carId },
+    const variante = await prisma.varianteCar.findUnique({
+      where: { id: varianteCarId },
       include: {
-        brand: true,
-        category: true
+        car: {
+          include: { brand: true, category: true }
+        }
       }
     });
 
-    if (!car) {
+    if (!variante) {
       return {
         available: false,
         reason: 'Voiture introuvable',
@@ -40,17 +41,9 @@ const checkCarAvailability = async (carId, dateDebut, dateFin, excludeBookingId 
       };
     }
 
-    if (!car.is_available) {
-      return {
-        available: false,
-        reason: 'Voiture temporairement indisponible',
-        conflicts: []
-      };
-    }
-
     // Check for existing bookings that overlap
     const whereClause = {
-      car_id: carId,
+      variante_car_id: varianteCarId,
       OR: [
         {
           date_debut: {
@@ -61,10 +54,8 @@ const checkCarAvailability = async (carId, dateDebut, dateFin, excludeBookingId 
           }
         }
       ],
-      status: {
-        name: {
-          in: ['PENDING', 'CONFIRMED', 'ACTIVE']
-        }
+      status_name: {
+        in: ['EN_ATTENTE', 'EN_COURS']
       }
     };
 
@@ -91,7 +82,7 @@ const checkCarAvailability = async (carId, dateDebut, dateFin, excludeBookingId 
     // Check for maintenance conflicts
     const conflictingMaintenance = await prisma.maintenance.findMany({
       where: {
-        car_id: carId,
+        variante_car_id: varianteCarId,
         scheduled_date: {
           gte: startDate,
           lte: endDate
@@ -108,7 +99,7 @@ const checkCarAvailability = async (carId, dateDebut, dateFin, excludeBookingId 
         id: booking.id,
         dateDebut: booking.date_debut,
         dateFin: booking.date_fin,
-        status: booking.status.name,
+        status: booking.status_name,
         user: `${booking.user.nom} ${booking.user.prenom}`
       })),
       ...conflictingMaintenance.map(maintenance => ({
@@ -126,11 +117,12 @@ const checkCarAvailability = async (carId, dateDebut, dateFin, excludeBookingId 
       available,
       reason: available ? null : 'Conflits de réservation ou maintenance',
       conflicts,
-      car: {
-        id: car.id,
-        brand: car.brand.name,
-        model: car.modele,
-        registration: car.immatriculation
+      variante: {
+        id: variante.id,
+        car_id: variante.car_id,
+        brand: variante.car.brand.name,
+        model: variante.car.modele,
+        registration: variante.immatriculation
       }
     };
 
@@ -167,11 +159,9 @@ const getAvailableCars = async (filters) => {
     const startDate = new Date(date_debut);
     const endDate = new Date(date_fin);
 
-    // Build where clause for cars
+    // Build where clause for cars (only allowed fields)
     const whereClause = {
-      disponible: true,
-      statut: 'DISPONIBLE',
-      AND: []
+      statut: 'DISPONIBLE'
     };
 
     if (category_id) {
@@ -184,10 +174,6 @@ const getAvailableCars = async (filters) => {
 
     if (transmission) {
       whereClause.transmission = transmission;
-    }
-
-    if (fuel_type) {
-      whereClause.type_carburant = fuel_type;
     }
 
     if (min_seats) {
@@ -206,43 +192,42 @@ const getAvailableCars = async (filters) => {
       }
     }
 
-    if (location) {
-      const locationMap = {
-        'Casablanca (Ville)': 'Casablanca',
-        'Casablanca – Aéroport Mohammed V (CMN)': 'Casablanca',
-        'Rabat (Ville)': 'Rabat',
-        'Rabat – Aéroport Rabat-Salé (RBA)': 'Rabat'
-      };
-      const city = locationMap[location] || location;
-      whereClause.AND.push({
-        OR: [
-          { ville: { contains: city, mode: 'insensitive' } },
-          { agence_ville: { contains: city, mode: 'insensitive' } }
-        ]
-      });
-    }
+    // location filter removed (now on VarianteCar)
 
     // Get all cars matching basic criteria
     const cars = await prisma.car.findMany({
       where: whereClause,
-      include: {
-        brand: true,
-        category: true,
-        images: {
-          take: 1,
-          orderBy: { created_at: 'asc' }
-        }
+      select: {
+        id: true,
+        brand_id: true,
+        category_id: true,
+        modele: true,
+        transmission: true,
+        nombre_places: true,
+        nombre_portes: true,
+        prix_par_jour: true,
+        statut: true,
+        brand: { select: { name: true } },
+        category: { select: { name: true } },
+        images: { select: { image_url: true, is_primary: true } }
       },
-      orderBy: {
-        prix_par_jour: 'asc'
-      }
+      orderBy: { prix_par_jour: 'asc' }
     });
 
     // Filter out cars with conflicts
     const availableCars = [];
 
     for (const car of cars) {
-      const availability = await checkCarAvailability(car.id, startDate, endDate);
+      // Check any variant availability
+      const variants = await prisma.varianteCar.findMany({
+        where: { car_id: car.id },
+        select: { id: true }
+      });
+      let availability = { available: false, reason: null, conflicts: [] };
+      for (const v of variants) {
+        const a = await checkCarAvailability(v.id, startDate, endDate);
+        if (a.available) { availability = a; break; }
+      }
       
       if (availability.available) {
         // Calculate total price for the period
@@ -276,11 +261,9 @@ const getAvailableCars = async (filters) => {
  * @param {Date} toDate - End date (optional)
  * @returns {Promise<Array>} Maintenance schedule
  */
-const getCarMaintenanceSchedule = async (carId, fromDate = null, toDate = null) => {
+const getCarMaintenanceSchedule = async (varianteCarId, fromDate = null, toDate = null) => {
   try {
-    const whereClause = {
-      car_id: carId
-    };
+    const whereClause = { variante_car_id: varianteCarId };
 
     if (fromDate || toDate) {
       whereClause.scheduled_date = {};
@@ -295,16 +278,10 @@ const getCarMaintenanceSchedule = async (carId, fromDate = null, toDate = null) 
     const maintenance = await prisma.maintenance.findMany({
       where: whereClause,
       include: {
-        car: {
+        varianteCar: {
           select: {
             id: true,
-            modele: true,
-            immatriculation: true,
-            brand: {
-              select: {
-                name: true
-              }
-            }
+            immatriculation: true
           }
         }
       },
@@ -328,14 +305,14 @@ const getCarMaintenanceSchedule = async (carId, fromDate = null, toDate = null) 
  * @param {Date|string} dateFin - End date
  * @returns {Promise<Array>} Maintenance conflicts
  */
-const checkMaintenanceConflicts = async (carId, dateDebut, dateFin) => {
+const checkMaintenanceConflicts = async (varianteCarId, dateDebut, dateFin) => {
   try {
     const startDate = new Date(dateDebut);
     const endDate = new Date(dateFin);
 
     const conflicts = await prisma.maintenance.findMany({
       where: {
-        car_id: carId,
+        variante_car_id: varianteCarId,
         scheduled_date: {
           gte: startDate,
           lte: endDate
@@ -365,13 +342,13 @@ const checkMaintenanceConflicts = async (carId, dateDebut, dateFin) => {
  * @param {number} excludeBookingId - Booking ID to exclude
  * @returns {Promise<Array>} Booking conflicts
  */
-const getBookingConflicts = async (carId, dateDebut, dateFin, excludeBookingId = null) => {
+const getBookingConflicts = async (varianteCarId, dateDebut, dateFin, excludeBookingId = null) => {
   try {
     const startDate = new Date(dateDebut);
     const endDate = new Date(dateFin);
 
     const whereClause = {
-      car_id: carId,
+      variante_car_id: varianteCarId,
       OR: [
         {
           date_debut: {
@@ -382,10 +359,8 @@ const getBookingConflicts = async (carId, dateDebut, dateFin, excludeBookingId =
           }
         }
       ],
-      status: {
-        name: {
-          in: ['PENDING', 'CONFIRMED', 'ACTIVE']
-        }
+      status_name: {
+        in: ['EN_ATTENTE', 'EN_COURS']
       }
     };
 
@@ -428,14 +403,14 @@ const getBookingConflicts = async (carId, dateDebut, dateFin, excludeBookingId =
  * @param {number} bookingId - Booking ID
  * @returns {Promise<boolean>} Success status
  */
-const reserveCarForBooking = async (carId, dateDebut, dateFin, bookingId) => {
+const reserveCarForBooking = async (varianteCarId, dateDebut, dateFin, bookingId) => {
   try {
     // This is handled by the booking creation itself
     // We just verify availability one more time
-    const availability = await checkCarAvailability(carId, dateDebut, dateFin);
+    const availability = await checkCarAvailability(varianteCarId, dateDebut, dateFin);
     
     if (!availability.available) {
-      throw new CarNotAvailableError(carId, dateDebut, dateFin, availability.reason);
+      throw new CarNotAvailableError(varianteCarId, dateDebut, dateFin, availability.reason);
     }
 
     return true;
@@ -452,7 +427,7 @@ const reserveCarForBooking = async (carId, dateDebut, dateFin, bookingId) => {
  * @param {number} bookingId - Booking ID
  * @returns {Promise<boolean>} Success status
  */
-const releaseCarFromBooking = async (carId, bookingId) => {
+const releaseCarFromBooking = async (varianteCarId, bookingId) => {
   try {
     // Verify the booking exists and is completed/cancelled
     const booking = await prisma.booking.findUnique({
@@ -464,11 +439,11 @@ const releaseCarFromBooking = async (carId, bookingId) => {
       throw new Error('Réservation introuvable');
     }
 
-    if (!['COMPLETED', 'CANCELLED'].includes(booking.status.name)) {
+    if (!['TERMINE', 'ANNULE'].includes(booking.status_name)) {
       throw new Error('La réservation doit être terminée ou annulée pour libérer la voiture');
     }
 
-    // Car is automatically available when no active bookings exist
+    // Variante is automatically available when no active bookings exist
     // This is more of a verification step
     return true;
 
@@ -491,21 +466,24 @@ const getCarAvailabilityCalendar = async (carId, startDate, endDate) => {
     const currentDate = new Date(startDate);
 
     // Get all bookings and maintenance for the period
+    const variants = await prisma.varianteCar.findMany({
+      where: { car_id: carId },
+      select: { id: true }
+    });
+    const variantIds = variants.map(v => v.id);
+
     const bookings = await prisma.booking.findMany({
       where: {
-        car_id: carId,
+        variante_car_id: { in: variantIds },
         date_debut: { lte: endDate },
         date_fin: { gte: startDate },
-        status: {
-          name: { in: ['PENDING', 'CONFIRMED', 'ACTIVE'] }
-        }
-      },
-      include: { status: true }
+        status_name: { in: ['EN_ATTENTE', 'EN_COURS'] }
+      }
     });
 
     const maintenance = await prisma.maintenance.findMany({
       where: {
-        car_id: carId,
+        variante_car_id: { in: variantIds },
         scheduled_date: { gte: startDate, lte: endDate },
         status: { in: ['SCHEDULED', 'IN_PROGRESS'] }
       }

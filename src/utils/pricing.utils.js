@@ -172,7 +172,9 @@ const calculateComprehensivePricing = (params) => {
     additionalDrivers = [],
     loyaltyDiscountPercent = 0,
     usePoints = 0,
-    pointsValue = 0
+    pointsValue = 0,
+    mileageOption = 'KM_340',
+    paymentMode = 'EN_LIGNE'
   } = params;
   
   const numberOfDays = Math.ceil((new Date(dateFin) - new Date(dateDebut)) / (1000 * 60 * 60 * 24));
@@ -182,6 +184,8 @@ const calculateComprehensivePricing = (params) => {
   const insurancePrice = calculateInsurancePrice(insurance, numberOfDays);
   const additionalDriversPrice = calculateAdditionalDriversFee(additionalDrivers, numberOfDays);
   const fuelSurcharge = calculateFuelSurcharge(numberOfDays, car.fuel_type);
+  const mileageFeePerDay = mileageOption === 'KM_UNLIMITED' ? 50 : 0;
+  const mileageFeeTotal = Math.round(mileageFeePerDay * numberOfDays * 100) / 100;
   
   // Surcharges
   const weekendSurcharge = calculateWeekendSurcharge(dateDebut, dateFin, parseFloat(car.tarif_journalier));
@@ -189,7 +193,7 @@ const calculateComprehensivePricing = (params) => {
   
   // Subtotal before discounts
   const subtotalBeforeDiscounts = basePrice + insurancePrice + additionalDriversPrice + 
-                                 fuelSurcharge + weekendSurcharge + seasonalSurcharge;
+                                 fuelSurcharge + weekendSurcharge + seasonalSurcharge + mileageFeeTotal;
   
   // Discounts
   const longTermDiscount = calculateLongTermDiscount(numberOfDays, basePrice);
@@ -200,8 +204,10 @@ const calculateComprehensivePricing = (params) => {
   
   // Final calculations
   const subtotal = subtotalBeforeDiscounts - totalDiscounts;
-  const deposit = Math.round(subtotal * 0.20 * 100) / 100; // 20% deposit
-  const totalPrice = subtotal;
+  const agencyFeePercent = paymentMode === 'EN_AGENCE' ? 0.025 : 0;
+  const agencyFeeAmount = Math.round(subtotal * agencyFeePercent * 100) / 100;
+  const deposit = Math.round((subtotal + agencyFeeAmount) * 0.20 * 100) / 100;
+  const totalPrice = subtotal + agencyFeeAmount;
   
   return {
     numberOfDays,
@@ -211,7 +217,11 @@ const calculateComprehensivePricing = (params) => {
       additionalDriversPrice: Math.round(additionalDriversPrice * 100) / 100,
       fuelSurcharge: Math.round(fuelSurcharge * 100) / 100,
       weekendSurcharge: Math.round(weekendSurcharge * 100) / 100,
-      seasonalSurcharge: Math.round(seasonalSurcharge * 100) / 100
+      seasonalSurcharge: Math.round(seasonalSurcharge * 100) / 100,
+      mileageFeePerDay,
+      mileageFeeTotal,
+      agencyFeePercent: agencyFeePercent * 100,
+      agencyFeeAmount
     },
     subtotalBeforeDiscounts: Math.round(subtotalBeforeDiscounts * 100) / 100,
     discounts: {

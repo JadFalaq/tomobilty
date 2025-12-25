@@ -1,4 +1,28 @@
 const prisma = require('../config/prisma');
+const availabilityService = require('../services/availability.service');
+function getHourMinuteInTZ(dateStr, tz) {
+  try {
+    const parts = new Intl.DateTimeFormat('fr-MA', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+      timeZone: tz || 'Africa/Casablanca'
+    }).formatToParts(new Date(dateStr));
+    const hour = parseInt(parts.find(p => p.type === 'hour')?.value || '0', 10);
+    const minute = parseInt(parts.find(p => p.type === 'minute')?.value || '0', 10);
+    return { hour, minute };
+  } catch {
+    return { hour: NaN, minute: NaN };
+  }
+}
+function isOutsideBusinessHoursTZ(dateStr) {
+  const { hour, minute } = getHourMinuteInTZ(dateStr, 'Africa/Casablanca');
+  if (isNaN(hour)) return true;
+  if (hour < 9) return true;
+  if (hour > 17) return true;
+  if (hour === 17 && minute > 0) return true;
+  return false;
+}
 const { AppError, asyncHandler } = require('../middlewares/errorHandler.middleware');
 const { calculateRentalDays } = require('../utils/validation.util');
  
@@ -8,31 +32,21 @@ const getCars = asyncHandler(async (req, res) => {
   const {
     page = 1,
     limit = 12,
-    ville,
     marque,
     prix_min,
     prix_max,
     date_debut,
     date_fin,
     category_id,
-    transmission,
-    carburant
+    transmission
   } = req.query;
 
   const skip = (parseInt(page) - 1) * parseInt(limit);
 
   // Build where clause
   const where = {
-    disponible: true,
     statut: 'DISPONIBLE'
   };
-
-  if (ville) {
-    where.ville = {
-      contains: ville,
-      mode: 'insensitive'
-    };
-  }
 
   if (marque) {
     where.brand = {
@@ -51,67 +65,50 @@ const getCars = asyncHandler(async (req, res) => {
     where.transmission = transmission;
   }
 
-  if (carburant) {
-    where.type_carburant = carburant;
-  }
-
   if (prix_min || prix_max) {
     where.prix_par_jour = {};
     if (prix_min) where.prix_par_jour.gte = parseFloat(prix_min);
     if (prix_max) where.prix_par_jour.lte = parseFloat(prix_max);
   }
 
-  // Check availability for specific dates
+  // Check availability for specific dates via centralized service
+  let availableCarIds = null;
   if (date_debut && date_fin) {
-    where.bookings = {
-      none: {
-        AND: [
-          {
-            OR: [
-              {
-                date_debut: {
-                  lte: new Date(date_fin)
-                }
-              },
-              {
-                date_fin: {
-                  gte: new Date(date_debut)
-                }
-              }
-            ]
-          },
-          {
-            status: {
-              name: {
-                notIn: ['CANCELLED', 'REJECTED']
-              }
-            }
-          }
-        ]
-      }
-    };
+    const availableCars = await availabilityService.getAvailableCars({
+      date_debut,
+      date_fin,
+      category_id,
+      brand_id: undefined,
+      transmission,
+      min_price: prix_min,
+      max_price: prix_max
+    });
+    availableCarIds = availableCars.map(c => c.id);
   }
 
   // Get cars with relations
   const [cars, total] = await Promise.all([
     prisma.car.findMany({
-      where,
-      include: {
-        brand: true,
-        category: true,
-        images: {
-          orderBy: {
-            is_primary: 'desc'
-          }
-        }
+      where: availableCarIds ? { ...where, id: { in: availableCarIds } } : where,
+      select: {
+        id: true,
+        brand_id: true,
+        category_id: true,
+        modele: true,
+        transmission: true,
+        nombre_places: true,
+        nombre_portes: true,
+        prix_par_jour: true,
+        statut: true,
+        brand: { select: { name: true } },
+        category: { select: { name: true } },
+        images: { select: { image_url: true, is_primary: true } }
       },
-      orderBy: {
-        date_creation: 'desc'
-      },
+      orderBy: { date_creation: 'desc' },
       skip,
       take: parseInt(limit)
     }),
-    prisma.car.count({ where })
+    prisma.car.count({ where: availableCarIds ? { ...where, id: { in: availableCarIds } } : where })
   ]);
 
   // Calculate rental price if dates provided
@@ -152,7 +149,6 @@ const getCars = asyncHandler(async (req, res) => {
         pages: Math.ceil(total / parseInt(limit))
       },
       filters: {
-        ville,
         marque,
         prix_min,
         prix_max,
@@ -167,16 +163,13 @@ const getCars = asyncHandler(async (req, res) => {
 const searchCars = asyncHandler(async (req, res) => {
   const {
     q,
-    ville,
     date_debut,
     date_fin,
     prix_max,
-    places_min,
-    features
+    places_min
   } = req.query;
 
   const where = {
-    disponible: true,
     statut: 'DISPONIBLE'
   };
 
@@ -208,14 +201,6 @@ const searchCars = asyncHandler(async (req, res) => {
     ];
   }
 
-  // Location filter
-  if (ville) {
-    where.ville = {
-      contains: ville,
-      mode: 'insensitive'
-    };
-  }
-
   // Price filter
   if (prix_max) {
     where.prix_par_jour = {
@@ -230,62 +215,38 @@ const searchCars = asyncHandler(async (req, res) => {
     };
   }
 
-  // Features filter
-  if (features) {
-    const featureList = features.split(',');
-    if (featureList.includes('climatisation')) {
-      where.climatisation = true;
-    }
-    if (featureList.includes('gps')) {
-      where.gps = true;
-    }
-  }
-
-  // Availability check
+  // Availability check via centralized service
   if (date_debut && date_fin) {
-    where.bookings = {
-      none: {
-        AND: [
-          {
-            OR: [
-              {
-                date_debut: {
-                  lte: new Date(date_fin)
-                }
-              },
-              {
-                date_fin: {
-                  gte: new Date(date_debut)
-                }
-              }
-            ]
-          },
-          {
-            status: {
-              name: {
-                notIn: ['CANCELLED', 'REJECTED']
-              }
-            }
-          }
-        ]
-      }
-    };
+    const availableCars = await availabilityService.getAvailableCars({
+      date_debut,
+      date_fin,
+      category_id: undefined,
+      brand_id: undefined,
+      transmission: undefined,
+      min_price: undefined,
+      max_price: prix_max,
+      min_seats: places_min ? parseInt(places_min) : undefined
+    });
+    where.id = { in: availableCars.map(c => c.id) };
   }
 
   const cars = await prisma.car.findMany({
     where,
-    include: {
-      brand: true,
-      category: true,
-      images: {
-        where: {
-          is_primary: true
-        }
-      }
+    select: {
+      id: true,
+      brand_id: true,
+      category_id: true,
+      modele: true,
+      transmission: true,
+      nombre_places: true,
+      nombre_portes: true,
+      prix_par_jour: true,
+      statut: true,
+      brand: { select: { name: true } },
+      category: { select: { name: true } },
+      images: { select: { image_url: true, is_primary: true } }
     },
-    orderBy: {
-      prix_par_jour: 'asc'
-    },
+    orderBy: { prix_par_jour: 'asc' },
     take: 20
   });
 
@@ -304,14 +265,19 @@ const getCarById = asyncHandler(async (req, res) => {
 
   const car = await prisma.car.findUnique({
     where: { id: parseInt(id) },
-    include: {
-      brand: true,
-      category: true,
-      images: {
-        orderBy: {
-          is_primary: 'desc'
-        }
-      }
+    select: {
+      id: true,
+      brand_id: true,
+      category_id: true,
+      modele: true,
+      transmission: true,
+      nombre_places: true,
+      nombre_portes: true,
+      prix_par_jour: true,
+      statut: true,
+      brand: { select: { name: true } },
+      category: { select: { name: true } },
+      images: { select: { image_url: true, is_primary: true } }
     }
   });
 
@@ -338,7 +304,6 @@ const checkAvailability = asyncHandler(async (req, res) => {
     where: { id: parseInt(id) },
     select: {
       id: true,
-      disponible: true,
       statut: true
     }
   });
@@ -347,7 +312,7 @@ const checkAvailability = asyncHandler(async (req, res) => {
     throw new AppError('Voiture non trouvée', 404, 'CAR_NOT_FOUND');
   }
 
-  if (!car.disponible || car.statut !== 'DISPONIBLE') {
+  if (car.statut !== 'DISPONIBLE') {
     return res.json({
       success: true,
       data: {
@@ -358,36 +323,25 @@ const checkAvailability = asyncHandler(async (req, res) => {
   }
 
   // Check for conflicting bookings
-  const conflictingBooking = await prisma.booking.findFirst({
-    where: {
-      car_id: parseInt(id),
-      AND: [
-        {
-          OR: [
-            {
-              date_debut: {
-                lte: new Date(date_fin)
-              }
-            },
-            {
-              date_fin: {
-                gte: new Date(date_debut)
-              }
-            }
-          ]
-        },
-        {
-          status: {
-            name: {
-              notIn: ['CANCELLED', 'REJECTED']
-            }
-          }
-        }
-      ]
-    }
+  // Available if any variant has no conflicting booking
+  const variants = await prisma.varianteCar.findMany({
+    where: { car_id: parseInt(id) },
+    select: { id: true }
   });
-
-  const available = !conflictingBooking;
+  let available = false;
+  for (const v of variants) {
+    const conflict = await prisma.booking.findFirst({
+      where: {
+        variante_car_id: v.id,
+        AND: [
+          { date_debut: { lte: new Date(date_fin) } },
+          { date_fin: { gte: new Date(date_debut) } },
+          { status: { name: { notIn: ['ANNULE', 'TERMINE'] } } }
+        ]
+      }
+    });
+    if (!conflict) { available = true; break; }
+  }
 
   res.json({
     success: true,
@@ -398,7 +352,7 @@ const checkAvailability = asyncHandler(async (req, res) => {
   });
 });
 
-// Get available cars by time interval (ignore location)
+// Get available cars by time interval (via centralized availability service)
 const getAvailableCars = asyncHandler(async (req, res) => {
   try {
     console.log('[GET /api/cars/available] Query:', req.query);
@@ -440,31 +394,23 @@ const getAvailableCars = asyncHandler(async (req, res) => {
         received: req.query
       });
     }
-    const where = {
-      statut: 'DISPONIBLE',
-      disponible: true,
-      bookings: {
-        none: {
-          AND: [
-            { date_debut: { lte: end } },
-            { date_fin: { gte: start } },
-            {
-              status: {
-                name: { notIn: ['CANCELLED', 'REJECTED'] }
-              }
-            }
-          ]
-        }
-      }
-    };
-    const cars = await prisma.car.findMany({
-      where,
-      include: {
-        brand: true,
-        category: true,
-        images: { where: { is_primary: true } }
-      },
-      orderBy: { prix_par_jour: 'asc' }
+    const hoursErrors = [];
+    if (isOutsideBusinessHoursTZ(start_date)) {
+      hoursErrors.push({ field: 'start_date', message: 'Doit être entre 09:00 et 17:00' });
+    }
+    if (isOutsideBusinessHoursTZ(end_date)) {
+      hoursErrors.push({ field: 'end_date', message: 'Doit être entre 09:00 et 17:00' });
+    }
+    if (hoursErrors.length) {
+      return res.status(400).json({
+        success: false,
+        message: 'Heures invalides',
+        errors: hoursErrors
+      });
+    }
+    const cars = await availabilityService.getAvailableCars({
+      date_debut: start_date,
+      date_fin: end_date
     });
     res.json({ success: true, data: { cars, total: cars.length } });
   } catch (err) {
@@ -479,24 +425,11 @@ const createCar = asyncHandler(async (req, res) => {
     brand_id,
     category_id,
     modele,
-    annee,
-    immatriculation,
-    couleur,
-    type_carburant,
     transmission,
     nombre_places,
     nombre_portes,
-    climatisation,
-    gps,
     prix_par_jour,
-    caution,
-    agence_nom,
-    agence_ville,
-    agence_adresse,
-    agence_telephone,
-    caracteristiques,
-    description,
-    ville
+    statut
   } = req.body;
 
   const car = await prisma.car.create({
@@ -504,28 +437,22 @@ const createCar = asyncHandler(async (req, res) => {
       brand_id: parseInt(brand_id),
       category_id: parseInt(category_id),
       modele,
-      annee: parseInt(annee),
-      immatriculation,
-      couleur,
-      type_carburant,
       transmission,
       nombre_places: nombre_places ? parseInt(nombre_places) : null,
       nombre_portes: nombre_portes ? parseInt(nombre_portes) : null,
-      climatisation: climatisation === true || climatisation === 'true',
-      gps: gps === true || gps === 'true',
       prix_par_jour: parseFloat(prix_par_jour),
-      caution: caution ? parseFloat(caution) : 0,
-      agence_nom,
-      agence_ville,
-      agence_adresse,
-      agence_telephone,
-      caracteristiques,
-      description,
-      ville
+      statut: statut || 'DISPONIBLE'
     },
-    include: {
-      brand: true,
-      category: true
+    select: {
+      id: true,
+      brand_id: true,
+      category_id: true,
+      modele: true,
+      transmission: true,
+      nombre_places: true,
+      nombre_portes: true,
+      prix_par_jour: true,
+      statut: true
     }
   });
 
@@ -544,30 +471,23 @@ const updateCar = asyncHandler(async (req, res) => {
   // Convert string numbers to integers/floats
   if (updateData.brand_id) updateData.brand_id = parseInt(updateData.brand_id);
   if (updateData.category_id) updateData.category_id = parseInt(updateData.category_id);
-  if (updateData.annee) updateData.annee = parseInt(updateData.annee);
   if (updateData.nombre_places) updateData.nombre_places = parseInt(updateData.nombre_places);
   if (updateData.nombre_portes) updateData.nombre_portes = parseInt(updateData.nombre_portes);
   if (updateData.prix_par_jour) updateData.prix_par_jour = parseFloat(updateData.prix_par_jour);
-  if (updateData.caution) updateData.caution = parseFloat(updateData.caution);
-
-  // Convert boolean strings
-  if (updateData.climatisation !== undefined) {
-    updateData.climatisation = updateData.climatisation === true || updateData.climatisation === 'true';
-  }
-  if (updateData.gps !== undefined) {
-    updateData.gps = updateData.gps === true || updateData.gps === 'true';
-  }
-  if (updateData.disponible !== undefined) {
-    updateData.disponible = updateData.disponible === true || updateData.disponible === 'true';
-  }
 
   const car = await prisma.car.update({
     where: { id: parseInt(id) },
     data: updateData,
-    include: {
-      brand: true,
-      category: true,
-      images: true
+    select: {
+      id: true,
+      brand_id: true,
+      category_id: true,
+      modele: true,
+      transmission: true,
+      nombre_places: true,
+      nombre_portes: true,
+      prix_par_jour: true,
+      statut: true
     }
   });
 
@@ -582,13 +502,15 @@ const updateCar = asyncHandler(async (req, res) => {
 const deleteCar = asyncHandler(async (req, res) => {
   const { id } = req.params;
 
-  // Check if car has active bookings
+  // Check if car has active bookings via variants
   const activeBookings = await prisma.booking.count({
     where: {
-      car_id: parseInt(id),
+      varianteCar: {
+        car_id: parseInt(id)
+      },
       status: {
         name: {
-          notIn: ['CANCELLED', 'COMPLETED']
+          notIn: ['ANNULE', 'TERMINE']
         }
       }
     }
