@@ -21,12 +21,6 @@ const validateBookingData = (req, res, next) => {
   } = req.body;
 
   const errors = [];
-  const allowedLocations = [
-    'Casablanca (Ville)',
-    'Casablanca – Aéroport Mohammed V (CMN)',
-    'Rabat (Ville)',
-    'Rabat – Aéroport Rabat-Salé (RBA)'
-  ];
 
   // Required fields validation
   if (!car_id) {
@@ -64,13 +58,7 @@ const validateBookingData = (req, res, next) => {
     req.body.protection_id = pid;
   }
 
-  if (lieu_prise_en_charge && !allowedLocations.includes(lieu_prise_en_charge)) {
-    errors.push('Lieu de prise en charge invalide');
-  }
-
-  if (lieu_retour && !allowedLocations.includes(lieu_retour)) {
-    errors.push('Lieu de retour invalide');
-  }
+  // Location fields are optional and free-form; IDs are resolved in controller
 
   // Additional drivers validation
   if (additional_drivers.length > 3) {

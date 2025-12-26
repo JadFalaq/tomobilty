@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Table from '@/components/admin/Table';
+import api from '@/lib/api';
 
 export default function AdminBookings() {
   const [bookings, setBookings] = useState([]);
@@ -15,15 +16,9 @@ export default function AdminBookings() {
   const fetchBookings = async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/api/admin/bookings?page=${pagination.page}&pageSize=${pagination.pageSize}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setBookings(data.data.items);
-        setPagination(data.data.pagination);
-      }
+      const res = await api.get('/admin/bookings', { params: { page: pagination.page, pageSize: pagination.pageSize } });
+      setBookings(res.data.data.items);
+      setPagination(res.data.data.pagination);
     } catch (error) {
       console.error('Error fetching bookings:', error);
     } finally {
@@ -34,12 +29,8 @@ export default function AdminBookings() {
   const handleDelete = async (booking: any) => {
     if (!confirm(`Supprimer la réservation #${booking.id}?`)) return;
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/api/admin/bookings/${booking.id}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (response.ok) fetchBookings();
+      await api.delete(`/admin/bookings/${booking.id}`);
+      fetchBookings();
     } catch (error) {
       console.error('Error deleting booking:', error);
     }

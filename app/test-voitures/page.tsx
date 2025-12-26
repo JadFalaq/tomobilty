@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { voituresAPI } from '@/lib/api';
+import api from '@/lib/api';
 
 export default function TestVoitures() {
   const [voitures, setVoitures] = useState<any[]>([]);
@@ -10,7 +11,7 @@ export default function TestVoitures() {
   const [apiUrl, setApiUrl] = useState('');
 
   useEffect(() => {
-    setApiUrl(process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api');
+    setApiUrl((api as any).defaults?.baseURL || '');
     chargerVoitures();
   }, []);
 

@@ -11,30 +11,32 @@ const {
   InvalidBookingStatusError,
   BookingCancellationError
 } = require('../errors/booking.errors');
+const { normalizeDatetime, resolveDateParams, isOutsideBusinessHoursTZ, toTZTimestamp } = require('../utils/datetime.utils');
 
-function getHourMinuteInTZ(dateStr, tz) {
-  try {
-    const parts = new Intl.DateTimeFormat('fr-MA', {
-      hour: '2-digit',
-      minute: '2-digit',
-      hourCycle: 'h23',
-      timeZone: tz || 'Africa/Casablanca'
-    }).formatToParts(new Date(dateStr));
-    const hour = parseInt(parts.find(p => p.type === 'hour')?.value || '0', 10);
-    const minute = parseInt(parts.find(p => p.type === 'minute')?.value || '0', 10);
-    return { hour, minute };
-  } catch {
-    return { hour: NaN, minute: NaN };
-  }
+ 
+
+function canTransition(currentName, targetName) {
+  const transitions = {
+    EN_ATTENTE: ['EN_COURS', 'ANNULE'],
+    EN_COURS: ['TERMINE'],
+    TERMINE: [],
+    ANNULE: []
+  };
+  const allowedNext = transitions[currentName] || [];
+  return allowedNext.includes(targetName);
 }
 
-function isOutsideBusinessHoursTZ(dateStr) {
-  const { hour, minute } = getHourMinuteInTZ(dateStr, 'Africa/Casablanca');
-  if (isNaN(hour)) return true;
-  if (hour < 9) return true;
-  if (hour > 17) return true;
-  if (hour === 17 && minute > 0) return true;
-  return false;
+function isOverdueTZ(booking, tz = 'Africa/Casablanca') {
+  const statusName = booking.status?.name || booking.status_name;
+  if (statusName !== 'EN_COURS') return false;
+  const endTs = toTZTimestamp(booking.date_fin, tz);
+  const nowTs = toTZTimestamp(new Date(), tz);
+  return endTs < nowTs;
+}
+
+function shouldCreateOverdueNotification(booking, tz = 'Africa/Casablanca') {
+  const meta = booking.metadata ? (() => { try { return JSON.parse(booking.metadata); } catch { return {}; } })() : {};
+  return isOverdueTZ(booking, tz) && !meta.overdue_notified_at;
 }
 
 /**
@@ -107,38 +109,94 @@ const calculatePrice = asyncHandler(async (req, res) => {
  * POST /api/bookings
  * Create a new booking
  */
-const createBooking = asyncHandler(async (req, res) => {
-  const bookingData = {
-    ...req.body,
-    user_id: req.user.id
-  };
-
-  const errors = [];
-  if (!bookingData.date_debut || !bookingData.date_fin) {
-    errors.push({ field: 'date_debut', msg: 'Requis' }, { field: 'date_fin', msg: 'Requis' });
-  } else {
-    if (isOutsideBusinessHoursTZ(bookingData.date_debut)) {
-      errors.push({ field: 'start_date', msg: 'Doit être entre 09:00 et 17:00' });
-    }
-    if (isOutsideBusinessHoursTZ(bookingData.date_fin)) {
-      errors.push({ field: 'end_date', msg: 'Doit être entre 09:00 et 17:00' });
-    }
-    if (new Date(bookingData.date_fin) <= new Date(bookingData.date_debut)) {
-      errors.push({ field: 'end_date', msg: 'Doit être après la date de départ' });
-    }
+const createBooking = async (req, res) => {
+  const merged = { ...req.body };
+  const { dateDebut, dateFin } = resolveDateParams(merged);
+  if (!dateDebut || !dateFin) {
+    return res.status(400).json({ success: false, message: 'Heures invalides', errors: [{ field: 'date_debut', msg: 'Requis' }, { field: 'date_fin', msg: 'Requis' }] });
   }
+  const normStartISO = normalizeDatetime(dateDebut, true);
+  const normEndISO = normalizeDatetime(dateFin, false);
+  if (!normStartISO || !normEndISO) {
+    return res.status(400).json({ success: false, message: 'Heures invalides', errors: [{ field: 'date_debut', msg: 'Invalide' }, { field: 'date_fin', msg: 'Invalide' }] });
+  }
+  const normStart = new Date(normStartISO);
+  const normEnd = new Date(normEndISO);
+  const errors = [];
+  if (normEnd <= normStart) {
+    errors.push({ field: 'end_date', msg: 'Doit être après la date de départ' });
+  }
+  const startHadTime = typeof dateDebut === 'string' && (dateDebut.includes('T') || /\d{2}:\d{2}/.test(dateDebut));
+  const endHadTime = typeof dateFin === 'string' && (dateFin.includes('T') || /\d{2}:\d{2}/.test(dateFin));
   if (errors.length) {
     return res.status(400).json({ success: false, message: 'Heures invalides', errors });
   }
+  // Resolve pickup/return sites if IDs are provided (backward compatible with legacy strings)
+  let lieu_prise_en_charge = merged.lieu_prise_en_charge || null;
+  let lieu_retour = merged.lieu_retour || null;
+  const pickupIdRaw = merged.pickup_site_id;
+  const returnIdRaw = merged.return_site_id;
 
-  const result = await bookingService.createBooking(bookingData);
+  if (pickupIdRaw !== undefined && pickupIdRaw !== null && pickupIdRaw !== '') {
+    const pickupId = parseInt(pickupIdRaw);
+    if (isNaN(pickupId) || pickupId < 1) {
+      return res.status(400).json({
+        success: false,
+        message: 'Erreurs de validation',
+        errors: [{ field: 'pickup_site_id', msg: 'ID invalide', code: 'INVALID_PICKUP_SITE' }]
+      });
+    }
+    const pickupSite = await prisma.pickupSite.findUnique({ where: { id: pickupId } });
+    if (!pickupSite || pickupSite.is_active !== true) {
+      return res.status(400).json({
+        success: false,
+        message: 'Erreurs de validation',
+        errors: [{ field: 'pickup_site_id', msg: 'Site de retrait invalide', code: 'INVALID_PICKUP_SITE' }]
+      });
+    }
+    lieu_prise_en_charge = pickupSite.nom;
+  }
+
+  if (returnIdRaw !== undefined && returnIdRaw !== null && returnIdRaw !== '') {
+    const returnId = parseInt(returnIdRaw);
+    if (isNaN(returnId) || returnId < 1) {
+      return res.status(400).json({
+        success: false,
+        message: 'Erreurs de validation',
+        errors: [{ field: 'return_site_id', msg: 'ID invalide', code: 'INVALID_RETURN_SITE' }]
+      });
+    }
+    const returnSite = await prisma.pickupSite.findUnique({ where: { id: returnId } });
+    if (!returnSite || returnSite.is_active !== true) {
+      console.log('⚠️ invalid return_site_id:', returnId, 'returnSite:', returnSite);
+      return res.status(400).json({
+        success: false,
+        message: 'Erreurs de validation',
+        errors: [{ field: 'return_site_id', msg: 'Site de retour invalide', code: 'INVALID_RETURN_SITE' }]
+      });
+    }
+    lieu_retour = returnSite.nom;
+  }
+
+  const bookingData = { 
+    ...req.body, 
+    user_id: req.user.id, 
+    date_debut: normStartISO, 
+    date_fin: normEndISO, 
+    lieu_prise_en_charge, 
+    lieu_retour 
+  };
+  console.log('➡️ createBooking controller: invoking bookingService.createBooking');
+  console.log('🔎 typeof bookingService.createBooking:', typeof bookingService.createBooking);
+  const bookingSvc = require('../services/booking.service');
+  const result = await bookingSvc.createBooking(bookingData);
 
   res.status(201).json({
     success: true,
     message: 'Réservation créée avec succès',
     data: result
   });
-});
+};
 
 /**
  * GET /api/bookings/user/:userId
@@ -212,6 +270,188 @@ const updateBooking = asyncHandler(async (req, res) => {
   });
 });
 
+const getMyBookings = asyncHandler(async (req, res) => {
+  const { page = 1, limit = 10, status, q } = req.query;
+  const skip = (parseInt(page) - 1) * parseInt(limit);
+  const where = { user_id: req.user.id };
+  if (status) where.status = { name: status };
+  if (q) {
+    const term = q.toString().trim();
+    const idNum = parseInt(term, 10);
+    const textFilter = {
+      varianteCar: {
+        car: {
+          OR: [
+            { modele: { contains: term, mode: 'insensitive' } },
+            { brand: { name: { contains: term, mode: 'insensitive' } } }
+          ]
+        }
+      }
+    };
+    if (!isNaN(idNum)) {
+      where.OR = [{ id: idNum }, textFilter];
+    } else {
+      Object.assign(where, textFilter);
+    }
+  }
+  const [items, totalItems] = await Promise.all([
+    prisma.booking.findMany({
+      where,
+      include: {
+        status: true,
+        varianteCar: {
+          include: {
+            car: {
+              include: {
+                brand: true,
+                images: {
+                  where: { is_primary: true },
+                  take: 1
+                }
+              }
+            }
+          }
+        },
+        payments: {
+          orderBy: { created_at: 'desc' },
+          take: 1
+        },
+        invoices: {
+          orderBy: { created_at: 'desc' },
+          take: 1
+        }
+      },
+      orderBy: { date_creation: 'desc' },
+      skip,
+      take: parseInt(limit)
+    }),
+    prisma.booking.count({ where })
+  ]);
+  const projected = items.map(b => {
+    const lastPayment = b.payments?.[0] || null;
+    const lastInvoice = b.invoices?.[0] || null;
+    const primaryImage = b.varianteCar?.car?.images?.[0] || null;
+    return {
+      id: b.id,
+      date_debut: b.date_debut,
+      date_fin: b.date_fin,
+      prix_total: b.prix_total,
+      status: { name: b.status?.name || b.status_name },
+      mode_paiement: b.mode_paiement,
+      date_creation: b.date_creation,
+      car: {
+        id: b.varianteCar?.car?.id,
+        modele: b.varianteCar?.car?.modele,
+        brand: { name: b.varianteCar?.car?.brand?.name },
+        primaryImage: primaryImage ? { image_url: primaryImage.image_url, alt_text: primaryImage.alt_text || null } : null
+      },
+      is_paid: lastPayment ? lastPayment.status === 'COMPLETED' : false,
+      has_invoice: !!lastInvoice,
+      invoice_number: lastInvoice?.invoice_number || null
+    };
+  });
+  res.json({
+    success: true,
+    data: {
+      items: projected,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        totalItems,
+        totalPages: Math.ceil(totalItems / parseInt(limit))
+      }
+    }
+  });
+});
+
+const getMyBookingDetails = asyncHandler(async (req, res) => {
+  const bookingId = parseInt(req.params.bookingId);
+  const userId = req.user.id;
+  const booking = await bookingService.getBookingDetails(bookingId, userId);
+  const meta = booking.metadata ? (() => { try { return JSON.parse(booking.metadata); } catch { return {}; } })() : {};
+  const lastPayment = booking.payments?.[booking.payments.length - 1] || null;
+  const lastInvoice = booking.invoices?.[0] || null;
+  const car = booking.varianteCar?.car || null;
+  const primaryImage = car?.images?.find(i => i.is_primary) || car?.images?.[0] || null;
+  const details = {
+    id: booking.id,
+    date_debut: booking.date_debut,
+    date_fin: booking.date_fin,
+    prix_total: booking.prix_total,
+    status: { name: booking.status?.name || booking.status_name },
+    mode_paiement: booking.mode_paiement,
+    date_creation: booking.date_creation,
+    car: car ? {
+      id: car.id,
+      modele: car.modele,
+      brand: { name: car.brand?.name },
+      category: car.category ? { name: car.category.name } : null,
+      primaryImage: primaryImage ? { image_url: primaryImage.image_url, alt_text: primaryImage.alt_text || null } : null
+    } : null,
+    protection: booking.protection ? { id: booking.protection.id, name: booking.protection.name, price: booking.protection.frais_par_jour } : null,
+    km_option: meta.mileage_option || meta.km_option || null,
+    breakdown_lines: meta.breakdown_lines || meta.quote?.breakdown_lines || [],
+    caution_amount: meta.caution_amount || meta.quote?.caution_amount || booking.caution_payee || 0,
+    payment: lastPayment ? { status: lastPayment.status, amount: lastPayment.amount, provider: lastPayment.provider } : null,
+    invoice: lastInvoice ? { id: lastInvoice.id, invoice_number: lastInvoice.invoice_number, status: lastInvoice.status, pdf_path: lastInvoice.pdf_path || null } : null,
+    is_paid: lastPayment ? lastPayment.status === 'COMPLETED' : false,
+    has_invoice: !!lastInvoice
+  };
+  res.json({
+    success: true,
+    data: { booking: details }
+  });
+});
+
+const getMyBookingInvoice = asyncHandler(async (req, res) => {
+  const bookingId = parseInt(req.params.bookingId);
+  const booking = await bookingService.getBookingDetails(bookingId, req.user.id);
+  if (!booking.invoices || booking.invoices.length === 0) {
+    return res.status(404).json({ success: false, message: 'Facture non disponible' });
+  }
+  const invoice = await invoiceService.getInvoice(booking.invoices[0].id);
+  if (invoice.pdf_path) {
+    return res.sendFile(invoice.pdf_path);
+  }
+  return res.status(404).json({ success: false, message: 'Facture non disponible' });
+});
+
+const cancelMyBooking = asyncHandler(async (req, res) => {
+  const bookingId = parseInt(req.params.bookingId);
+  const booking = await prisma.booking.findUnique({
+    where: { id: bookingId },
+    include: { status: true }
+  });
+  if (!booking || booking.user_id !== req.user.id) {
+    return res.status(404).json({ success: false, message: 'Réservation introuvable' });
+  }
+  const statusName = booking.status?.name || booking.status_name;
+  if (statusName !== 'EN_ATTENTE') {
+    return res.status(400).json({ success: false, message: 'Réservation non annulable', code: 'BOOKING_NOT_CANCELLABLE' });
+  }
+  const cancelledStatus = await prisma.bookingStatus.findFirst({ where: { name: 'ANNULE' } });
+  const meta = booking.metadata ? (() => { try { return JSON.parse(booking.metadata); } catch { return {}; } })() : {};
+  const CANCELLATION_FEE_MAD = 50;
+  const breakdown = Array.isArray(meta.breakdown_lines) ? meta.breakdown_lines.slice() : [];
+  breakdown.push({ code: 'CANCEL', description: 'Frais d’annulation', amount: CANCELLATION_FEE_MAD });
+  meta.breakdown_lines = breakdown;
+  const newTotal = Math.max(0, parseFloat(booking.prix_total) + CANCELLATION_FEE_MAD);
+  const updated = await prisma.booking.update({
+    where: { id: bookingId },
+    data: {
+      status_id: cancelledStatus.id,
+      status_name: 'ANNULE',
+      prix_total: newTotal,
+      metadata: JSON.stringify(meta)
+    },
+    include: { status: true }
+  });
+  res.json({
+    success: true,
+    message: 'Réservation annulée avec succès',
+    data: { booking: updated }
+  });
+});
 /**
  * DELETE /api/bookings/:bookingId
  * Cancel booking
@@ -285,6 +525,24 @@ const removeAdditionalDriver = asyncHandler(async (req, res) => {
   });
 });
 
+/**
+ * GET /api/pickup-sites
+ * Public: list active pickup/return sites
+ */
+const getPickupSites = asyncHandler(async (req, res) => {
+  const items = await prisma.pickupSite.findMany({
+    where: { is_active: true },
+    orderBy: { nom: 'asc' },
+    select: { id: true, nom: true }
+  });
+  res.json({
+    success: true,
+    data: {
+      items,
+      total: items.length
+    }
+  });
+});
 /**
  * GET /api/bookings/:bookingId/contract
  * Get booking contract
@@ -480,30 +738,26 @@ const confirmAgence = asyncHandler(async (req, res) => {
 
 // Quote pricing for booking draft
 const getQuote = asyncHandler(async (req, res) => {
-  const { carId, start_date, end_date, mode_paiement, kilometrage, protectionId } = req.body;
-  if (!carId || !start_date || !end_date) {
+  const { carId, mode_paiement, kilometrage, protectionId } = req.body;
+  const { dateDebut, dateFin } = resolveDateParams(req.body);
+  if (!carId || !dateDebut || !dateFin) {
     return res.status(400).json({ success: false, message: 'Paramètres requis: carId, start_date, end_date' });
   }
-  const sd = new Date(start_date);
-  const ed = new Date(end_date);
+  const sd = new Date(normalizeDatetime(dateDebut, true));
+  const ed = new Date(normalizeDatetime(dateFin, false));
   if (isNaN(sd.getTime()) || isNaN(ed.getTime()) || ed <= sd) {
     return res.status(400).json({ success: false, message: 'Heures invalides', errors: [{ field: 'end_date', msg: 'Doit être après la date de départ' }] });
   }
-  const hoursErrors = [];
-  if (isOutsideBusinessHoursTZ(start_date)) {
-    hoursErrors.push({ field: 'start_date', msg: 'Doit être entre 09:00 et 17:00' });
-  }
-  if (isOutsideBusinessHoursTZ(end_date)) {
-    hoursErrors.push({ field: 'end_date', msg: 'Doit être entre 09:00 et 17:00' });
-  }
-  if (hoursErrors.length) {
-    return res.status(400).json({ success: false, message: 'Heures invalides', errors: hoursErrors });
+  const startHadTime = typeof dateDebut === 'string' && (dateDebut.includes('T') || /\d{2}:\d{2}/.test(dateDebut));
+  const endHadTime = typeof dateFin === 'string' && (dateFin.includes('T') || /\d{2}:\d{2}/.test(dateFin));
+  if ((startHadTime && isOutsideBusinessHoursTZ(sd.toISOString())) || (endHadTime && isOutsideBusinessHoursTZ(ed.toISOString()))) {
+    return res.status(400).json({ success: false, message: 'Heures invalides', errors: [{ field: 'start_date', msg: 'Doit être entre 09:00 et 17:00' }] });
   }
   const car = await prisma.car.findUnique({ where: { id: parseInt(carId) } });
   if (!car) return res.status(404).json({ success: false, message: 'Voiture introuvable' });
   const protection = protectionId ? await prisma.protection.findUnique({ where: { id: parseInt(protectionId) } }) : null;
 
-  const days = Math.ceil((new Date(end_date) - new Date(start_date)) / (1000 * 60 * 60 * 24));
+  const days = Math.ceil((ed - sd) / (1000 * 60 * 60 * 24));
   const base_price_per_day = parseFloat(car.prix_par_jour);
   const protection_price_per_day = protection ? parseFloat(protection.frais_par_jour) : 0;
   const km_option_price_per_day = kilometrage === 'KM_UNLIMITED' ? 50 : 0;
@@ -671,10 +925,36 @@ const getAllBookings = asyncHandler(async (req, res) => {
     prisma.booking.count({ where })
   ]);
 
+  const nowTs = toTZTimestamp(new Date(), 'Africa/Casablanca');
+  const enriched = [];
+  for (const b of bookings) {
+    const overdue = isOverdueTZ(b, 'Africa/Casablanca');
+    let meta = b.metadata ? (() => { try { return JSON.parse(b.metadata); } catch { return {}; } })() : {};
+    if (shouldCreateOverdueNotification(b, 'Africa/Casablanca')) {
+      try {
+        await prisma.notification.create({
+          data: {
+            user_id: b.user_id,
+            title: 'Réservation en retard',
+            message: `Réservation ${b.id} (${b.car.brand.name} ${b.car.modele}) en retard depuis ${new Date(b.date_fin).toISOString()}`,
+            type: 'BOOKING',
+            is_read: false
+          }
+        });
+        meta = { ...meta, overdue_notified_at: new Date().toISOString() };
+        await prisma.booking.update({
+          where: { id: b.id },
+          data: { metadata: JSON.stringify(meta) }
+        });
+      } catch {}
+    }
+    enriched.push({ ...b, is_overdue: overdue });
+  }
+
   res.json({
     success: true,
     data: {
-      bookings,
+      bookings: enriched,
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),
@@ -685,61 +965,61 @@ const getAllBookings = asyncHandler(async (req, res) => {
   });
 });
 
-// Update booking status (Admin only)
+// Update booking status (Admin/Agent)
 const updateBookingStatus = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const { status_name, notes } = req.body;
+  const { status, status_name, notes } = req.body;
 
-  if (!status_name) {
-    throw new AppError('Nom du statut requis', 400, 'MISSING_STATUS');
+  const requestedStatus = status || status_name;
+  if (!requestedStatus) {
+    return res.status(400).json({ success: false, message: 'Statut requis', code: 'MISSING_STATUS' });
   }
 
-  // Get status by name
-  const status = await prisma.bookingStatus.findFirst({
-    where: { name: status_name }
+  const allowed = ['EN_ATTENTE', 'EN_COURS', 'TERMINE', 'ANNULE'];
+  if (!allowed.includes(requestedStatus)) {
+    return res.status(400).json({ success: false, message: 'Statut invalide', code: 'INVALID_STATUS' });
+  }
+
+  const current = await prisma.booking.findUnique({
+    where: { id: parseInt(id) },
+    include: { status: true }
   });
-
-  if (!status) {
-    throw new AppError('Statut invalide', 400, 'INVALID_STATUS');
+  if (!current) {
+    return res.status(404).json({ success: false, message: 'Réservation introuvable', code: 'BOOKING_NOT_FOUND' });
   }
 
-  const booking = await prisma.booking.update({
+  const currentName = current.status?.name || current.status_name;
+  const transitions = {
+    EN_ATTENTE: ['EN_COURS', 'ANNULE'],
+    EN_COURS: ['TERMINE'],
+    TERMINE: [],
+    ANNULE: []
+  };
+  const allowedNext = transitions[currentName] || [];
+  if (!allowedNext.includes(requestedStatus)) {
+    return res.status(400).json({ success: false, message: 'Transition de statut invalide', code: 'INVALID_STATUS_TRANSITION' });
+  }
+
+  const statusRow = await prisma.bookingStatus.findFirst({ where: { name: requestedStatus } });
+  if (!statusRow) {
+    return res.status(400).json({ success: false, message: 'Statut non configuré', code: 'STATUS_NOT_CONFIGURED' });
+  }
+
+  const updated = await prisma.booking.update({
     where: { id: parseInt(id) },
     data: {
-      status_id: status.id
+      status_id: statusRow.id,
+      status_name: requestedStatus,
+      metadata: notes ? JSON.stringify({ ...(current.metadata ? JSON.parse(current.metadata) : {}), status_notes: notes }) : current.metadata
     },
     include: {
-      user: {
-        select: {
-          id: true,
-          email: true,
-          nom: true,
-          prenom: true
-        }
-      },
-      car: {
-        include: {
-          brand: true
-        }
-      },
+      user: { select: { id: true, email: true, nom: true, prenom: true } },
+      car: { include: { brand: true } },
       status: true
     }
   });
 
-  // If booking is confirmed, award loyalty points
-  if (status_name === 'CONFIRMED') {
-    try {
-      await loyaltyService.awardBookingPoints(booking.user_id, booking.id, booking.prix_total);
-    } catch (error) {
-      console.error('Failed to award loyalty points:', error);
-    }
-  }
-
-  res.json({
-    success: true,
-    message: 'Statut de réservation mis à jour avec succès',
-    data: { booking }
-  });
+  res.status(200).json({ success: true, message: 'Statut mis à jour', data: { booking: updated } });
 });
 
 // Get booking statistics (Admin only)
@@ -912,6 +1192,7 @@ module.exports = {
   createBooking,
   getUserBookings,
   getBookingById,
+  getPickupSites,
   updateBooking,
   cancelBooking,
   startRental,
@@ -920,6 +1201,10 @@ module.exports = {
   removeAdditionalDriver,
   getBookingContract,
   getBookingInvoice,
+  getMyBookings,
+  getMyBookingDetails,
+  getMyBookingInvoice,
+  cancelMyBooking,
   applyLoyalty,
   confirmAgence,
   getAvailableCars,
@@ -927,5 +1212,8 @@ module.exports = {
   updateBookingStatus,
   getBookingStatistics,
   getQuote,
-  handleBookingErrors
+  handleBookingErrors,
+  canTransition,
+  isOverdueTZ,
+  shouldCreateOverdueNotification
 };

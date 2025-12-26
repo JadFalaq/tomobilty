@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Plus, X } from 'lucide-react';
 import Table from '@/components/admin/Table';
+import api from '@/lib/api';
 
 export default function AdminUsers() {
   const [users, setUsers] = useState([]);
@@ -21,22 +22,9 @@ export default function AdminUsers() {
   const fetchUsers = async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
-      const params = new URLSearchParams({
-        page: pagination.page.toString(),
-        pageSize: pagination.pageSize.toString(),
-        ...(searchQuery && { search: searchQuery })
-      });
-
-      const response = await fetch(`http://localhost:5000/api/admin/users?${params}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setUsers(data.data.items);
-        setPagination(data.data.pagination);
-      }
+      const res = await api.get('/admin/users', { params: { page: pagination.page, pageSize: pagination.pageSize, ...(searchQuery ? { search: searchQuery } : {}) } });
+      setUsers(res.data.data.items);
+      setPagination(res.data.data.pagination);
     } catch (error) {
       console.error('Error fetching users:', error);
     } finally {
@@ -46,21 +34,10 @@ export default function AdminUsers() {
 
   const handleCreate = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5000/api/admin/users', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(formData)
-      });
-
-      if (response.ok) {
-        setShowCreateModal(false);
-        setFormData({ nom: '', prenom: '', email: '', telephone: '', role: 'CLIENT', mot_de_passe: '' });
-        fetchUsers();
-      }
+      await api.post('/admin/users', formData);
+      setShowCreateModal(false);
+      setFormData({ nom: '', prenom: '', email: '', telephone: '', role: 'CLIENT', mot_de_passe: '' });
+      fetchUsers();
     } catch (error) {
       console.error('Error creating user:', error);
     }
@@ -68,21 +45,10 @@ export default function AdminUsers() {
 
   const handleUpdate = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/api/admin/users/${selectedUser.id}`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(formData)
-      });
-
-      if (response.ok) {
-        setShowEditModal(false);
-        setSelectedUser(null);
-        fetchUsers();
-      }
+      await api.put(`/admin/users/${selectedUser.id}`, formData);
+      setShowEditModal(false);
+      setSelectedUser(null);
+      fetchUsers();
     } catch (error) {
       console.error('Error updating user:', error);
     }
@@ -92,15 +58,8 @@ export default function AdminUsers() {
     if (!confirm(`Êtes-vous sûr de vouloir supprimer ${user.nom} ${user.prenom}?`)) return;
 
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/api/admin/users/${user.id}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-
-      if (response.ok) {
-        fetchUsers();
-      }
+      await api.delete(`/admin/users/${user.id}`);
+      fetchUsers();
     } catch (error) {
       console.error('Error deleting user:', error);
     }

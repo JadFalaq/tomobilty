@@ -35,8 +35,7 @@ export default function Navbar() {
   };
 
   return (
-    <nav className="fixed top-0 left-0 w-full z-50 bg-primary-950/95 backdrop-blur-md shadow-lg h-[72px]">
-      <div className="absolute inset-0 bg-grain-pattern opacity-5 pointer-events-none"></div>
+    <nav className="fixed top-0 left-0 w-full z-50 bg-black/80 backdrop-blur-md border-b border-white/10 h-[72px]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative h-[72px]">
         <div className="flex justify-between items-center h-full">
           <div className="flex items-center">
@@ -151,7 +150,7 @@ export default function Navbar() {
 
       {/* Mobile Menu */}
       {isMenuOpen && (
-        <div className="md:hidden bg-primary-950/95 backdrop-blur-xl border-t border-primary-900/50 absolute w-full">
+        <div className="md:hidden bg-black/60 backdrop-blur-xl border-t border-white/10 absolute w-full">
           <div className="px-4 pt-2 pb-6 space-y-2">
             <Link
               href="/"

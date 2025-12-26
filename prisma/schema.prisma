@@ -418,6 +418,16 @@ model PromotionCategory {
   @@map("promotion_category")
 }
 
+model PickupSite {
+  id         Int      @id @default(autoincrement())
+  nom        String   @db.VarChar(255) @unique
+  is_active  Boolean  @default(true)
+  created_at DateTime @default(now())
+  updated_at DateTime @default(now()) @updatedAt
+
+  @@map("pickup_site")
+}
+
 model ChatConversation {
   id         Int           @id @default(autoincrement())
   user_id    Int?

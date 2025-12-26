@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Table from '@/components/admin/Table';
+import api from '@/lib/api';
 
 export default function AdminLoyalty() {
   const [accounts, setAccounts] = useState([]);
@@ -15,15 +16,9 @@ export default function AdminLoyalty() {
   const fetchAccounts = async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/api/admin/loyalty/accounts?page=${pagination.page}&pageSize=${pagination.pageSize}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setAccounts(data.data.items);
-        setPagination(data.data.pagination);
-      }
+      const res = await api.get('/admin/loyalty/accounts', { params: { page: pagination.page, pageSize: pagination.pageSize } });
+      setAccounts(res.data.data.items);
+      setPagination(res.data.data.pagination);
     } catch (error) {
       console.error('Error fetching loyalty accounts:', error);
     } finally {

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Plus, X } from 'lucide-react';
 import Table from '@/components/admin/Table';
+import api from '@/lib/api';
 
 export default function AdminMaintenance() {
   const [maintenance, setMaintenance] = useState([]);
@@ -27,15 +28,9 @@ export default function AdminMaintenance() {
   const fetchMaintenance = async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/api/admin/maintenance?page=${pagination.page}&pageSize=${pagination.pageSize}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setMaintenance(data.data.items);
-        setPagination(data.data.pagination);
-      }
+      const res = await api.get('/admin/maintenance', { params: { page: pagination.page, pageSize: pagination.pageSize } });
+      setMaintenance(res.data.data.items);
+      setPagination(res.data.data.pagination);
     } catch (error) {
       console.error('Error fetching maintenance:', error);
     } finally {
@@ -45,14 +40,8 @@ export default function AdminMaintenance() {
 
   const fetchCars = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5000/api/admin/cars?pageSize=100', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setCars(data.data.items);
-      }
+      const res = await api.get('/admin/cars', { params: { pageSize: 100 } });
+      setCars(res.data.data.items);
     } catch (error) {
       console.error('Error fetching cars:', error);
     }
@@ -60,19 +49,9 @@ export default function AdminMaintenance() {
 
   const handleCreate = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5000/api/admin/maintenance', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(formData)
-      });
-      if (response.ok) {
-        setShowCreateModal(false);
-        fetchMaintenance();
-      }
+      await api.post('/admin/maintenance', formData);
+      setShowCreateModal(false);
+      fetchMaintenance();
     } catch (error) {
       console.error('Error creating maintenance:', error);
     }
@@ -81,12 +60,8 @@ export default function AdminMaintenance() {
   const handleDelete = async (item: any) => {
     if (!confirm('Supprimer cette maintenance?')) return;
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/api/admin/maintenance/${item.id}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (response.ok) fetchMaintenance();
+      await api.delete(`/admin/maintenance/${item.id}`);
+      fetchMaintenance();
     } catch (error) {
       console.error('Error deleting maintenance:', error);
     }

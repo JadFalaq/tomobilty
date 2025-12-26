@@ -20,6 +20,7 @@ jest.mock('../config/prisma', () => ({
   booking: {
     findUnique: jest.fn(),
     findMany: jest.fn(),
+    findFirst: jest.fn(),
     create: jest.fn(),
     update: jest.fn(),
     count: jest.fn()
@@ -61,10 +62,11 @@ jest.mock('../config/prisma', () => ({
   },
   varianteCar: {
     findUnique: jest.fn(),
-    findFirst: jest.fn()
+    findFirst: jest.fn(),
+    findMany: jest.fn()
   },
   $transaction: jest.fn()
-}));
+})); 
 
 // Mock services
 jest.mock('../services/availability.service');
@@ -213,10 +215,11 @@ describe('Booking Service', () => {
       prisma.$transaction.mockImplementation(async (callback) => {
         return await callback(prisma);
       });
-      prisma.booking.create.mockResolvedValue(mockBooking);
-      prisma.car.findUnique.mockResolvedValue(mockCar);
-      prisma.varianteCar.findFirst.mockResolvedValue({ id: 99, car: mockCar });
-      availabilityService.checkCarAvailability.mockResolvedValue({ available: true });
+  prisma.booking.create.mockResolvedValue(mockBooking);
+  prisma.car.findUnique.mockResolvedValue(mockCar);
+  prisma.varianteCar.findFirst.mockResolvedValue({ id: 99, car: mockCar });
+  prisma.varianteCar.findMany.mockResolvedValue([{ id: 99, car: mockCar }]);
+  availabilityService.checkCarAvailability.mockResolvedValue({ available: true });
       
       bookingService.calculateBookingPrice = jest.fn().mockResolvedValue({
         totalPrice: 1000,
@@ -248,9 +251,10 @@ describe('Booking Service', () => {
         date_permis: new Date(new Date().setFullYear(new Date().getFullYear() - 1))
       };
 
-      prisma.user.findUnique.mockResolvedValue(mockUser);
-      prisma.varianteCar.findFirst.mockResolvedValue({ id: 99, car: { id: 1, tarif_journalier: 200 } });
-      availabilityService.checkCarAvailability.mockResolvedValue({ available: true });
+  prisma.user.findUnique.mockResolvedValue(mockUser);
+  prisma.varianteCar.findFirst.mockResolvedValue({ id: 99, car: { id: 1, tarif_journalier: 200 } });
+  prisma.varianteCar.findMany.mockResolvedValue([{ id: 99, car: { id: 1, tarif_journalier: 200 } }]);
+  availabilityService.checkCarAvailability.mockResolvedValue({ available: true });
 
       await expect(bookingService.createBooking({
         user_id: 1,

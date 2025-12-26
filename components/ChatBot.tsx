@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { MessageCircle, X, Send, Minus } from 'lucide-react';
+import api from '@/lib/api';
 
 interface Message {
   id?: number;
@@ -54,16 +55,11 @@ export default function ChatBot() {
     setIsLoading(true);
 
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'}/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: userMessage.text,
-          sessionId: sessionId
-        })
+      const res = await api.post('/chat', {
+        prompt: userMessage.text,
+        sessionId: sessionId
       });
-
-      const data = await res.json();
+      const data = res.data;
       
       const botMessage: Message = {
         text: data.answer,

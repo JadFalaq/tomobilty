@@ -1,8 +1,16 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
-    domains: ['localhost', 'vercel.app'],
-    unoptimized: true
+    domains: ['localhost', 'vercel.app', 'images.unsplash.com'],
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'images.unsplash.com',
+        port: '',
+        pathname: '/**',
+      },
+    ],
+    unoptimized: false
   },
   eslint: {
     ignoreDuringBuilds: true

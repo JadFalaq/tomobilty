@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { Playfair_Display, Lato } from 'next/font/google'
 import './globals.css'
+import AppShell from '@/components/AppShell'
 
 const playfair = Playfair_Display({ 
   subsets: ['latin'],
@@ -30,7 +31,7 @@ export default function RootLayout({
   return (
     <html lang="fr" className={`${playfair.variable} ${lato.variable}`}>
       <body className={`${lato.className} pt-[72px]`}>
-        {children}
+        <AppShell>{children}</AppShell>
         <ChatBot />
       </body>
     </html>

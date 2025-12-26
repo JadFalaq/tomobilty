@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Table from '@/components/admin/Table';
+import api from '@/lib/api';
 
 export default function AdminDocuments() {
   const [documents, setDocuments] = useState([]);
@@ -15,15 +16,9 @@ export default function AdminDocuments() {
   const fetchDocuments = async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/api/admin/documents?page=${pagination.page}&pageSize=${pagination.pageSize}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setDocuments(data.data.items);
-        setPagination(data.data.pagination);
-      }
+      const res = await api.get('/admin/documents', { params: { page: pagination.page, pageSize: pagination.pageSize } });
+      setDocuments(res.data.data.items);
+      setPagination(res.data.data.pagination);
     } catch (error) {
       console.error('Error fetching documents:', error);
     } finally {

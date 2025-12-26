@@ -7,6 +7,7 @@ import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import BookingPriceSummary from '@/components/BookingPriceSummary';
 import { voituresAPI, protectionsAPI, reservationsAPI } from '@/lib/api';
+import { loyaltyAPI } from '@/lib/loyaltyAPI';
 
 function Content() {
   const params = useSearchParams();
@@ -59,26 +60,19 @@ function Content() {
         setProtectionFeePerDay(p ? Number(p.frais_par_jour) : 0);
       }
       try {
-        const li = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'}/loyalty/me`, {
-          credentials:'include',
-          headers: token ? { 'Authorization': `Bearer ${token}` } : undefined
-        }).then(r=>r.json());
-        if (li?.success) setLoyaltyInfo(li.data);
+        const li = await loyaltyAPI.getUserLoyaltyInfo();
+        if (li?.data?.success) setLoyaltyInfo(li.data.data);
       } catch {}
       try {
-        const qres = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'}/bookings/quote`, {
-          method:'POST',
-          headers:{ 'Content-Type':'application/json' },
-          body: JSON.stringify({
-            carId: parseInt(carId),
-            start_date: startDate,
-            end_date: endDate,
-            mode_paiement: paymentType === 'AGENCE' ? 'EN_AGENCE' : 'EN_LIGNE',
-            kilometrage: mileageOption,
-            protectionId: protectionId ? parseInt(protectionId) : undefined
-          })
-        }).then(r=>r.json());
-        if (qres?.success) setQuote(qres.data);
+        const qres = await reservationsAPI.obtenirDevis({
+          carId: parseInt(carId),
+          start_date: startDate,
+          end_date: endDate,
+          mode_paiement: paymentType === 'AGENCE' ? 'EN_AGENCE' : 'EN_LIGNE',
+          kilometrage: mileageOption,
+          protection_id: protectionId ? parseInt(protectionId) : undefined
+        });
+        if (qres?.data?.success) setQuote(qres.data.data);
       } catch {}
       // Create booking draft if not present
       if (!bookingId) {
@@ -109,29 +103,21 @@ function Content() {
 
   const applyLoyalty = async () => {
     if (!bookingId || !pointsToRedeem || pointsToRedeem <= 0) return;
-    if (!token) { setReserveError('Token d\'accès manquant'); return; }
-    const url = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'}/bookings/${bookingId}/apply-loyalty`;
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-      credentials: 'include',
-      body: JSON.stringify({ points_to_redeem: pointsToRedeem })
-    }).then(r=>r.json());
-    if (res?.success) {
-      setLoyaltyDiscount(res.data.discount_mad);
-      setShowLoyalty(false);
+    try {
+      const res = await reservationsAPI.mettreAJourStatut(String(bookingId), { action: 'APPLY_LOYALTY', points_to_redeem: pointsToRedeem });
+      if (res?.data?.success) {
+        setLoyaltyDiscount(res.data.data?.discount_mad || 0);
+        setShowLoyalty(false);
+      }
+    } catch (e) {
+      setReserveError('Erreur application fidélité');
     }
   };
 
   const confirmAgence = async () => {
     if (!bookingId) return;
-    if (!token) { setReserveError('Token d\'accès manquant'); return; }
-    const url = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'}/bookings/${bookingId}/confirm-agence`;
-    const res = await fetch(url, {
-      method:'POST',
-      headers:{ 'Content-Type':'application/json', 'Authorization': `Bearer ${token}` },
-      credentials:'include',
-      body: JSON.stringify({
+    try {
+      const res = await reservationsAPI.confirmerAgence(String(bookingId), {
         prenom: car?.user?.prenom || 'Client',
         nom: car?.user?.nom || 'Tomobilty',
         email: car?.user?.email || '',
@@ -140,12 +126,14 @@ function Content() {
         ageConfirmed: true,
         termsAccepted: true,
         billing_address: {}
-      })
-    }).then(r=>r.json());
-    if (res?.success) {
-      alert('Réservation confirmée en agence');
-    } else {
-      alert(res?.message || 'Erreur confirmation');
+      });
+      if (res?.data?.success) {
+        alert('Réservation confirmée en agence');
+      } else {
+        alert(res?.data?.message || 'Erreur confirmation');
+      }
+    } catch (e:any) {
+      alert(e?.message || 'Erreur confirmation');
     }
   };
 
@@ -253,46 +241,34 @@ function Content() {
                       setReserveLoading(true);
                       // Create booking
                       if (!token) { throw new Error('Token d\'accès manquant'); }
-                      const createRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'}/bookings`, {
-                        method:'POST',
-                        headers:{ 'Content-Type':'application/json', 'Authorization': `Bearer ${token}` },
-                        credentials:'include',
-                        body: JSON.stringify({
-                          car_id: parseInt(carId),
-                          date_debut: startDate,
-                          date_fin: endDate,
-                          mode_paiement: 'EN_AGENCE',
-                          protection_id: protectionId ? parseInt(protectionId) : undefined,
-                          mileage_option: mileageOption,
-                          // optional: places if available in query
-                          lieu_prise_en_charge: undefined,
-                          lieu_retour: undefined
-                        })
-                      }).then(r=>r.json());
-                      if (!createRes?.success) {
-                        throw new Error(createRes?.message || 'Erreur lors de la création de la réservation');
+                      const createRes = await reservationsAPI.creerReservation({
+                        car_id: parseInt(carId),
+                        date_debut: startDate,
+                        date_fin: endDate,
+                        mode_paiement: 'EN_AGENCE',
+                        protection_id: protectionId ? parseInt(protectionId) : undefined,
+                        mileage_option: mileageOption,
+                        lieu_prise_en_charge: undefined,
+                        lieu_retour: undefined
+                      });
+                      if (!createRes?.data?.success) {
+                        throw new Error(createRes?.data?.message || 'Erreur lors de la création de la réservation');
                       }
-                      const bid = createRes.data?.id || createRes.data?.booking?.id;
+                      const bid = createRes.data.data?.id || createRes.data.data?.booking?.id;
                       setBookingId(bid);
-                      // Confirm agence
-                      const confRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'}/bookings/${bid}/confirm-agence`, {
-                        method:'POST',
-                        headers:{ 'Content-Type':'application/json', 'Authorization': `Bearer ${token}` },
-                        credentials:'include',
-                        body: JSON.stringify({
-                          entreprise,
-                          prenom,
-                          nom,
-                          email,
-                          pays,
-                          telephone,
-                          ageConfirmed,
-                          termsAccepted,
-                          billing_address: {}
-                        })
-                      }).then(r=>r.json());
-                      if (!confRes?.success) {
-                        throw new Error(confRes?.message || 'Erreur confirmation agence');
+                      const confRes = await reservationsAPI.confirmerAgence(String(bid), {
+                        entreprise,
+                        prenom,
+                        nom,
+                        email,
+                        pays,
+                        telephone,
+                        ageConfirmed,
+                        termsAccepted,
+                        billing_address: {}
+                      });
+                      if (!confRes?.data?.success) {
+                        throw new Error(confRes?.data?.message || 'Erreur confirmation agence');
                       }
                       // Redirect confirmation/mes-reservations
                       alert('Réservation confirmée en agence');

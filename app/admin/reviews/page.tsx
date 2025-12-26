@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Table from '@/components/admin/Table';
+import api from '@/lib/api';
 
 export default function AdminReviews() {
   const [reviews, setReviews] = useState([]);
@@ -15,15 +16,9 @@ export default function AdminReviews() {
   const fetchReviews = async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/api/admin/reviews?page=${pagination.page}&pageSize=${pagination.pageSize}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setReviews(data.data.items);
-        setPagination(data.data.pagination);
-      }
+      const res = await api.get('/admin/reviews', { params: { page: pagination.page, pageSize: pagination.pageSize } });
+      setReviews(res.data.data.items);
+      setPagination(res.data.data.pagination);
     } catch (error) {
       console.error('Error fetching reviews:', error);
     } finally {
@@ -34,12 +29,8 @@ export default function AdminReviews() {
   const handleDelete = async (review: any) => {
     if (!confirm('Supprimer cet avis?')) return;
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/api/admin/reviews/${review.id}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (response.ok) fetchReviews();
+      await api.delete(`/admin/reviews/${review.id}`);
+      fetchReviews();
     } catch (error) {
       console.error('Error deleting review:', error);
     }

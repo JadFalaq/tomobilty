@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Plus, X } from 'lucide-react';
 import Table from '@/components/admin/Table';
+import api from '@/lib/api';
 
 export default function AdminCars() {
   const [cars, setCars] = useState([]);
@@ -35,15 +36,9 @@ export default function AdminCars() {
   const fetchCars = async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/api/admin/cars?page=${pagination.page}&pageSize=${pagination.pageSize}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setCars(data.data.items);
-        setPagination(data.data.pagination);
-      }
+      const res = await api.get('/admin/cars', { params: { page: pagination.page, pageSize: pagination.pageSize } });
+      setCars(res.data.data.items);
+      setPagination(res.data.data.pagination);
     } catch (error) {
       console.error('Error fetching cars:', error);
     } finally {
@@ -53,14 +48,8 @@ export default function AdminCars() {
 
   const fetchBrands = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5000/api/admin/car-brands?pageSize=100', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setBrands(data.data.items);
-      }
+      const res = await api.get('/admin/car-brands', { params: { pageSize: 100 } });
+      setBrands(res.data.data.items);
     } catch (error) {
       console.error('Error fetching brands:', error);
     }
@@ -68,14 +57,8 @@ export default function AdminCars() {
 
   const fetchCategories = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5000/api/admin/car-categories?pageSize=100', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setCategories(data.data.items);
-      }
+      const res = await api.get('/admin/car-categories', { params: { pageSize: 100 } });
+      setCategories(res.data.data.items);
     } catch (error) {
       console.error('Error fetching categories:', error);
     }
@@ -83,19 +66,9 @@ export default function AdminCars() {
 
   const handleCreate = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5000/api/admin/cars', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(formData)
-      });
-      if (response.ok) {
-        setShowCreateModal(false);
-        fetchCars();
-      }
+      await api.post('/admin/cars', formData);
+      setShowCreateModal(false);
+      fetchCars();
     } catch (error) {
       console.error('Error creating car:', error);
     }
@@ -103,19 +76,9 @@ export default function AdminCars() {
 
   const handleUpdate = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/api/admin/cars/${selectedCar.id}`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(formData)
-      });
-      if (response.ok) {
-        setShowEditModal(false);
-        fetchCars();
-      }
+      await api.put(`/admin/cars/${selectedCar.id}`, formData);
+      setShowEditModal(false);
+      fetchCars();
     } catch (error) {
       console.error('Error updating car:', error);
     }
@@ -124,12 +87,8 @@ export default function AdminCars() {
   const handleDelete = async (car: any) => {
     if (!confirm(`Supprimer ${car.brand?.name} ${car.modele}?`)) return;
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/api/admin/cars/${car.id}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (response.ok) fetchCars();
+      await api.delete(`/admin/cars/${car.id}`);
+      fetchCars();
     } catch (error) {
       console.error('Error deleting car:', error);
     }

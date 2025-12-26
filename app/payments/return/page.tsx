@@ -6,6 +6,7 @@ import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import { CheckCircle, XCircle, Clock, AlertTriangle, ArrowLeft, Home } from 'lucide-react';
 import Link from 'next/link';
+import api from '@/lib/api';
 
 interface PaymentResult {
   status: 'PAID' | 'FAILED' | 'CANCELED' | 'PENDING' | 'UNKNOWN';
@@ -29,15 +30,9 @@ function PaymentReturnContent() {
         const params = new URLSearchParams(searchParams.toString());
         
         // Faire un appel à l'API backend pour traiter le retour
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/payments/return?${params.toString()}`, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        });
-
-        if (response.ok) {
-          const data = await response.json();
+        const response = await api.get('/payments/return', { params: Object.fromEntries(params.entries()) });
+        if (response.status === 200) {
+          const data = response.data;
           if (data.success) {
             setResult({
               status: data.data.status,

@@ -1,28 +1,6 @@
 const prisma = require('../config/prisma');
 const availabilityService = require('../services/availability.service');
-function getHourMinuteInTZ(dateStr, tz) {
-  try {
-    const parts = new Intl.DateTimeFormat('fr-MA', {
-      hour: '2-digit',
-      minute: '2-digit',
-      hourCycle: 'h23',
-      timeZone: tz || 'Africa/Casablanca'
-    }).formatToParts(new Date(dateStr));
-    const hour = parseInt(parts.find(p => p.type === 'hour')?.value || '0', 10);
-    const minute = parseInt(parts.find(p => p.type === 'minute')?.value || '0', 10);
-    return { hour, minute };
-  } catch {
-    return { hour: NaN, minute: NaN };
-  }
-}
-function isOutsideBusinessHoursTZ(dateStr) {
-  const { hour, minute } = getHourMinuteInTZ(dateStr, 'Africa/Casablanca');
-  if (isNaN(hour)) return true;
-  if (hour < 9) return true;
-  if (hour > 17) return true;
-  if (hour === 17 && minute > 0) return true;
-  return false;
-}
+const { resolveDateParams, normalizeDatetime, isOutsideBusinessHoursTZ } = require('../utils/datetime.utils');
 const { AppError, asyncHandler } = require('../middlewares/errorHandler.middleware');
 const { calculateRentalDays } = require('../utils/validation.util');
  
@@ -294,10 +272,20 @@ const getCarById = asyncHandler(async (req, res) => {
 // Check car availability
 const checkAvailability = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const { date_debut, date_fin } = req.query;
+  const { dateDebut, dateFin } = resolveDateParams(req.query);
 
-  if (!date_debut || !date_fin) {
+  if (!dateDebut || !dateFin) {
     throw new AppError('Dates de début et fin requises', 400, 'MISSING_DATES');
+  }
+  const startISO = normalizeDatetime(dateDebut, true);
+  const endISO = normalizeDatetime(dateFin, false);
+  if (!startISO || !endISO) {
+    throw new AppError('Dates invalides', 400, 'INVALID_DATES');
+  }
+  const startHadTime = typeof dateDebut === 'string' && (dateDebut.includes('T') || /\d{2}:\d{2}/.test(dateDebut));
+  const endHadTime = typeof dateFin === 'string' && (dateFin.includes('T') || /\d{2}:\d{2}/.test(dateFin));
+  if ((startHadTime && isOutsideBusinessHoursTZ(startISO)) || (endHadTime && isOutsideBusinessHoursTZ(endISO))) {
+    throw new AppError('Heures invalides (09:00–17:00)', 400, 'INVALID_HOURS');
   }
 
   const car = await prisma.car.findUnique({
@@ -334,8 +322,8 @@ const checkAvailability = asyncHandler(async (req, res) => {
       where: {
         variante_car_id: v.id,
         AND: [
-          { date_debut: { lte: new Date(date_fin) } },
-          { date_fin: { gte: new Date(date_debut) } },
+          { date_debut: { lte: new Date(endISO) } },
+          { date_fin: { gte: new Date(startISO) } },
           { status: { name: { notIn: ['ANNULE', 'TERMINE'] } } }
         ]
       }
@@ -355,13 +343,11 @@ const checkAvailability = asyncHandler(async (req, res) => {
 // Get available cars by time interval (via centralized availability service)
 const getAvailableCars = asyncHandler(async (req, res) => {
   try {
-    console.log('[GET /api/cars/available] Query:', req.query);
-    const { start_date, end_date } = req.query;
-    if (!start_date || !end_date) {
+    const { dateDebut, dateFin } = resolveDateParams(req.query);
+    if (!dateDebut || !dateFin) {
       const validationErrors = [];
-      if (!start_date) validationErrors.push({ field: 'start_date', message: 'start_date is required' });
-      if (!end_date) validationErrors.push({ field: 'end_date', message: 'end_date is required' });
-      console.warn('[CARS AVAILABLE] validation errors:', validationErrors);
+      validationErrors.push({ field: 'date_debut', message: 'date_debut is required' });
+      validationErrors.push({ field: 'date_fin', message: 'date_fin is required' });
       return res.status(400).json({
         success: false,
         message: 'Données invalides',
@@ -369,48 +355,31 @@ const getAvailableCars = asyncHandler(async (req, res) => {
         received: req.query
       });
     }
-    const start = new Date(start_date);
-    const end = new Date(end_date);
-    console.log('[GET /api/cars/available] Parsed dates:', { start, end });
-    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
-      const validationErrors = [];
-      if (isNaN(start.getTime())) validationErrors.push({ field: 'start_date', message: 'Invalid date format' });
-      if (isNaN(end.getTime())) validationErrors.push({ field: 'end_date', message: 'Invalid date format' });
-      console.warn('[CARS AVAILABLE] validation errors:', validationErrors);
-      return res.status(400).json({
-        success: false,
-        message: 'Données invalides',
-        errors: validationErrors,
-        received: req.query
-      });
-    }
-    if (end <= start) {
-      const validationErrors = [{ field: 'end_date', message: 'end_date must be after start_date' }];
-      console.warn('[CARS AVAILABLE] validation errors:', validationErrors);
-      return res.status(400).json({
-        success: false,
-        message: 'Données invalides',
-        errors: validationErrors,
-        received: req.query
-      });
-    }
-    const hoursErrors = [];
-    if (isOutsideBusinessHoursTZ(start_date)) {
-      hoursErrors.push({ field: 'start_date', message: 'Doit être entre 09:00 et 17:00' });
-    }
-    if (isOutsideBusinessHoursTZ(end_date)) {
-      hoursErrors.push({ field: 'end_date', message: 'Doit être entre 09:00 et 17:00' });
-    }
-    if (hoursErrors.length) {
+    const startISO = normalizeDatetime(dateDebut, true);
+    const endISO = normalizeDatetime(dateFin, false);
+    const startHadTime = typeof dateDebut === 'string' && (dateDebut.includes('T') || /\d{2}:\d{2}/.test(dateDebut));
+    const endHadTime = typeof dateFin === 'string' && (dateFin.includes('T') || /\d{2}:\d{2}/.test(dateFin));
+    if ((startHadTime && isOutsideBusinessHoursTZ(startISO)) || (endHadTime && isOutsideBusinessHoursTZ(endISO))) {
       return res.status(400).json({
         success: false,
         message: 'Heures invalides',
-        errors: hoursErrors
+        errors: [{ field: 'date', message: 'Doit être entre 09:00 et 17:00' }]
       });
     }
+    const q = req.query;
+    delete q.location;
+    const fuel = q.fuel || q.fuel_type;
+    const seats = q.seats;
     const cars = await availabilityService.getAvailableCars({
-      date_debut: start_date,
-      date_fin: end_date
+      date_debut: startISO,
+      date_fin: endISO,
+      category_id: q.category_id,
+      brand_id: q.brand_id,
+      transmission: q.transmission,
+      min_price: q.min_price,
+      max_price: q.max_price,
+      seats,
+      fuel
     });
     res.json({ success: true, data: { cars, total: cars.length } });
   } catch (err) {

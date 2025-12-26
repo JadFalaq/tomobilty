@@ -1,6 +1,6 @@
 const express = require('express');
 const bookingController = require('../controllers/booking.controller');
-const { verifyToken, requireAdmin } = require('../middlewares/auth.middleware');
+const { verifyToken, requireAdmin, requireAgent } = require('../middlewares/auth.middleware');
 const { 
   validateBookingData,
   validateDriverData,
@@ -52,6 +52,38 @@ router.post('/',
   rateLimitBookingCreation,
   logBookingOperation('CREATE_BOOKING'),
   bookingController.createBooking
+);
+
+// GET /api/bookings/me - Canonique client: Mes réservations
+router.get('/me', 
+  verifyToken,
+  validatePagination,
+  logBookingOperation('GET_MY_BOOKINGS'),
+  bookingController.getMyBookings
+);
+
+// GET /api/bookings/me/:bookingId - Détail réservation (client)
+router.get('/me/:bookingId', 
+  verifyToken,
+  checkBookingOwnership,
+  logBookingOperation('GET_MY_BOOKING_DETAILS'),
+  bookingController.getMyBookingDetails
+);
+
+// GET /api/bookings/me/:bookingId/invoice - Télécharger facture (client)
+router.get('/me/:bookingId/invoice', 
+  verifyToken,
+  checkBookingOwnership,
+  logBookingOperation('GET_MY_BOOKING_INVOICE'),
+  bookingController.getMyBookingInvoice
+);
+
+// DELETE /api/bookings/me/:bookingId - Annuler réservation (client, EN_ATTENTE uniquement)
+router.delete('/me/:bookingId', 
+  verifyToken,
+  checkBookingOwnership,
+  logBookingOperation('CANCEL_MY_BOOKING'),
+  bookingController.cancelMyBooking
 );
 
 // GET /api/bookings/user/:userId? - Get user bookings
@@ -186,7 +218,7 @@ router.get('/admin/all',
 // PUT /api/bookings/:bookingId/status - Update booking status (admin)
 router.put('/:bookingId/status', 
   verifyToken,
-  requireAdmin,
+  requireAgent,
   logBookingOperation('ADMIN_UPDATE_STATUS'),
   bookingController.updateBookingStatus
 );

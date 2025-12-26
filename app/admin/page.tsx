@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import api from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import { Users, Car, Calendar, DollarSign, TrendingUp, Award, MessageSquare, FileText, Settings, Shield, Bell, Star, Wrench, Package } from 'lucide-react';
 
@@ -38,22 +39,8 @@ export default function AdminDashboard() {
 
   const fetchDashboardStats = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5000/api/admin/stats', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        console.log('Stats data received:', data);
-        setStats(data.data);
-      } else {
-        console.error('Stats API error:', response.status, response.statusText);
-        const errorData = await response.text();
-        console.error('Error details:', errorData);
-      }
+      const res = await api.get('/admin/stats');
+      setStats(res.data.data);
     } catch (error) {
       console.error('Error fetching dashboard stats:', error);
     } finally {

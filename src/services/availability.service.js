@@ -147,9 +147,8 @@ const getAvailableCars = async (filters) => {
       transmission,
       min_price,
       max_price,
-      fuel_type,
-      min_seats,
-      location
+      fuel,
+      seats
     } = filters;
 
     if (!date_debut || !date_fin) {
@@ -176,10 +175,8 @@ const getAvailableCars = async (filters) => {
       whereClause.transmission = transmission;
     }
 
-    if (min_seats) {
-      whereClause.nombre_places = {
-        gte: parseInt(min_seats)
-      };
+    if (seats) {
+      whereClause.nombre_places = parseInt(seats);
     }
 
     if (min_price || max_price) {
@@ -191,8 +188,6 @@ const getAvailableCars = async (filters) => {
         whereClause.prix_par_jour.lte = parseFloat(max_price);
       }
     }
-
-    // location filter removed (now on VarianteCar)
 
     // Get all cars matching basic criteria
     const cars = await prisma.car.findMany({
@@ -218,10 +213,13 @@ const getAvailableCars = async (filters) => {
     const availableCars = [];
 
     for (const car of cars) {
-      // Check any variant availability
+      // Check any variant availability (filter by fuel if provided)
       const variants = await prisma.varianteCar.findMany({
-        where: { car_id: car.id },
-        select: { id: true }
+        where: { 
+          car_id: car.id,
+          ...(fuel ? { type_carburant: mapFuelToEnum(fuel) } : {})
+        },
+        select: { id: true, type_carburant: true }
       });
       let availability = { available: false, reason: null, conflicts: [] };
       for (const v of variants) {
@@ -253,6 +251,16 @@ const getAvailableCars = async (filters) => {
     throw error;
   }
 };
+
+function mapFuelToEnum(value) {
+  if (!value) return undefined;
+  const v = String(value).toUpperCase();
+  if (v.includes('DIESEL')) return 'DIESEL';
+  if (v.includes('ESSENCE')) return 'ESSENCE';
+  if (v.includes('ELECTRI') || v.includes('ÉLECTRI')) return 'ELECTRIQUE';
+  if (v.includes('HYBR')) return 'HYBRIDE';
+  return undefined;
+}
 
 /**
  * Get car maintenance schedule

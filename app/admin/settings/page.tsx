@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { User, Bell, Globe, Calendar, Lock, Save } from 'lucide-react';
+import api from '@/lib/api';
 
 export default function AdminSettings() {
   const [loading, setLoading] = useState(true);
@@ -34,16 +35,9 @@ export default function AdminSettings() {
   const fetchSettings = async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5000/api/admin/me/settings', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setProfile(data.data.profile);
-        setPreferences(data.data.preferences);
-      }
+      const res = await api.get('/admin/me/settings');
+      setProfile(res.data.data.profile);
+      setPreferences(res.data.data.preferences);
     } catch (error) {
       console.error('Error fetching settings:', error);
       setMessage({ type: 'error', text: 'Erreur lors du chargement des paramètres' });
@@ -56,22 +50,9 @@ export default function AdminSettings() {
     setSaving(true);
     setMessage({ type: '', text: '' });
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5000/api/admin/me/settings', {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ profile, preferences })
-      });
-
-      if (response.ok) {
-        setMessage({ type: 'success', text: 'Paramètres enregistrés avec succès' });
-        setTimeout(() => setMessage({ type: '', text: '' }), 3000);
-      } else {
-        setMessage({ type: 'error', text: 'Erreur lors de l\'enregistrement' });
-      }
+      await api.put('/admin/me/settings', { profile, preferences });
+      setMessage({ type: 'success', text: 'Paramètres enregistrés avec succès' });
+      setTimeout(() => setMessage({ type: '', text: '' }), 3000);
     } catch (error) {
       console.error('Error saving settings:', error);
       setMessage({ type: 'error', text: 'Erreur lors de l\'enregistrement' });
@@ -94,27 +75,13 @@ export default function AdminSettings() {
     setSaving(true);
     setMessage({ type: '', text: '' });
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5000/api/admin/me/password', {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          currentPassword: passwordData.currentPassword,
-          newPassword: passwordData.newPassword
-        })
+      await api.put('/admin/me/password', {
+        currentPassword: passwordData.currentPassword,
+        newPassword: passwordData.newPassword
       });
-
-      if (response.ok) {
-        setMessage({ type: 'success', text: 'Mot de passe modifié avec succès' });
-        setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
-        setTimeout(() => setMessage({ type: '', text: '' }), 3000);
-      } else {
-        const data = await response.json();
-        setMessage({ type: 'error', text: data.message || 'Erreur lors du changement de mot de passe' });
-      }
+      setMessage({ type: 'success', text: 'Mot de passe modifié avec succès' });
+      setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+      setTimeout(() => setMessage({ type: '', text: '' }), 3000);
     } catch (error) {
       console.error('Error changing password:', error);
       setMessage({ type: 'error', text: 'Erreur lors du changement de mot de passe' });

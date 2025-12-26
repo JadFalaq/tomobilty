@@ -61,6 +61,31 @@ async function seedProtection() {
       }
     }
     console.log('✅ Protection types seeded.');
+    console.log('🔧 Seeding pickup sites...');
+    const pickupSites = [
+      { nom: 'Casablanca Aéroport' },
+      { nom: 'Casablanca Ville' },
+      { nom: 'Rabat Ville' },
+      { nom: 'Marrakech Aéroport' },
+    ];
+    for (const site of pickupSites) {
+      const existing = await prisma.pickupSite.findFirst({
+        where: { nom: site.nom }
+      });
+      if (existing) {
+        if (existing.is_active !== true) {
+          await prisma.pickupSite.update({
+            where: { id: existing.id },
+            data: { is_active: true }
+          });
+        }
+      } else {
+        await prisma.pickupSite.create({
+          data: { nom: site.nom, is_active: true }
+        });
+      }
+    }
+    console.log('✅ Pickup sites seeded.');
   } catch (e) {
     console.error('❌ Seed failed:', e.message);
   } finally {

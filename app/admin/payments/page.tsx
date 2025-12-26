@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Table from '@/components/admin/Table';
+import api from '@/lib/api';
 
 export default function AdminPayments() {
   const [payments, setPayments] = useState([]);
@@ -15,15 +16,9 @@ export default function AdminPayments() {
   const fetchPayments = async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/api/admin/payments?page=${pagination.page}&pageSize=${pagination.pageSize}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setPayments(data.data.items);
-        setPagination(data.data.pagination);
-      }
+      const res = await api.get('/admin/payments', { params: { page: pagination.page, pageSize: pagination.pageSize } });
+      setPayments(res.data.data.items);
+      setPagination(res.data.data.pagination);
     } catch (error) {
       console.error('Error fetching payments:', error);
     } finally {

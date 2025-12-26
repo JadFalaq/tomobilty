@@ -15,6 +15,7 @@ const reviewRoutes = require('../src/routes/review.routes');
 const adminRoutesComplete = require('../src/routes/admin.routes.complete');
 const testRoutes = require('../src/routes/test.routes');
 const protectionRoutes = require('../src/routes/protection.routes');
+const pickupSiteRoutes = require('../src/routes/pickupsite.routes');
 
 // Import middlewares
 const { errorHandler } = require('../src/middlewares/errorHandler.middleware');
@@ -24,11 +25,24 @@ const app = express();
 // Security middleware
 app.use(helmet());
 
-// CORS configuration
-app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
-  credentials: true
-}));
+// CORS configuration (allow dev ports 3000/3001 and Authorization header)
+const allowedOrigins = [
+  process.env.FRONTEND_URL,
+  'http://localhost:3000',
+  'http://localhost:3001',
+].filter(Boolean);
+const corsOptions = {
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(new Error('Not allowed by CORS'));
+  },
+  credentials: true,
+  methods: ['GET','POST','PUT','DELETE','OPTIONS'],
+  allowedHeaders: ['Content-Type','Authorization']
+};
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
@@ -55,6 +69,7 @@ app.use('/api/reviews', reviewRoutes);
 app.use('/api/admin', adminRoutesComplete);
 app.use('/api/test', testRoutes);
 app.use('/api/protections', protectionRoutes);
+app.use('/api/pickup-sites', pickupSiteRoutes);
 
 // 404 handler
 app.use('*', (req, res) => {
