@@ -1,11 +1,35 @@
 'use client';
 
 import React from 'react';
-import { Trophy, Star, Crown, Gem, ArrowRight, CheckCircle } from 'lucide-react';
+import { Trophy, Star, Crown, Gem, CheckCircle } from 'lucide-react';
+
+type LoyaltyTier = {
+  id: number;
+  name: string;
+  min_points: number;
+  discount_percent: number;
+  points_multiplier: number;
+  benefits?: string | null;
+};
+
+type LoyaltyAccount = {
+  lifetime_points: number;
+};
+
+type NextTierInfo = {
+  points_needed: number;
+  next_tier?: LoyaltyTier | null;
+};
+
+type LoyaltyData = {
+  account: LoyaltyAccount;
+  tier: LoyaltyTier;
+  next_tier?: NextTierInfo | null;
+};
 
 interface TierProgressionProps {
-  loyaltyData: any;
-  tiers: any[];
+  loyaltyData: LoyaltyData;
+  tiers: LoyaltyTier[];
 }
 
 export default function TierProgression({ loyaltyData, tiers }: TierProgressionProps) {
@@ -84,7 +108,7 @@ export default function TierProgression({ loyaltyData, tiers }: TierProgressionP
 
       {/* Tiers Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {sortedTiers.map((tierItem, index) => {
+        {sortedTiers.map((tierItem) => {
           const Icon = getTierIcon(tierItem.name);
           const isCurrentTier = tierItem.id === tier.id;
           const isUnlocked = account.lifetime_points >= tierItem.min_points;

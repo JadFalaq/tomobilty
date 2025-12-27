@@ -517,7 +517,7 @@ const sendEmail = async (emailData) => {
     const transporter = createEmailTransporter();
     
     const mailOptions = {
-      from: `"TOMOBILTY" <${process.env.SMTP_USER}>`,
+      from: `"TOMMOBILTY" <${process.env.SMTP_USER}>`,
       to: emailData.to,
       subject: emailData.subject,
       html: generateEmailHTML(emailData.template, emailData.data),
@@ -558,14 +558,14 @@ const generateEmailHTML = (template, data) => {
     <body>
       <div class="container">
         <div class="header">
-          <h1>TOMOBILTY</h1>
+          <h1>TOMMOBILTY</h1>
         </div>
         <div class="content">
           {{CONTENT}}
         </div>
         <div class="footer">
-          <p>TOMOBILTY - Location de véhicules au Maroc</p>
-          <p>Email: contact@tomobilty.com | Téléphone: +212 XXX XXX XXX</p>
+          <p>TOMMOBILTY - Location de véhicules au Maroc</p>
+          <p>Email: contact@tommobilty.com | Téléphone: +212 XXX XXX XXX</p>
         </div>
       </div>
     </body>
@@ -617,7 +617,7 @@ const generateEmailHTML = (template, data) => {
 
     default:
       content = `
-        <h2>Notification TOMOBILTY</h2>
+        <h2>Notification TOMMOBILTY</h2>
         <p>Bonjour ${data.customerName || 'Client'},</p>
         <p>Vous avez reçu une nouvelle notification concernant votre réservation.</p>
       `;

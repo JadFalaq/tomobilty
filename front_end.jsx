@@ -126,7 +126,7 @@ function Navbar({ currentView, setView, onOpenAuth }) {
           <div className="bg-[#ff003c] p-1.5 rounded-lg rotate-12 shadow-[0_0_10px_#ff003c]">
             <Zap size={20} className="text-white" fill="white" />
           </div>
-          <span className="text-2xl font-black italic tracking-tighter text-white">TOMOBILTY</span>
+          <span className="text-2xl font-black italic tracking-tighter text-white">TOMMOBILTY</span>
         </div>
         
         <div className="hidden md:flex gap-8 text-[10px] font-black uppercase tracking-[0.2em] text-white/70">
@@ -269,7 +269,7 @@ function AuthPortal({ isOpen, onClose }) {
               <div className="mt-12 pt-8 border-t border-white/5 text-center">
                 {mode === 'login' ? (
                   <div className="space-y-4">
-                    <p className="text-[10px] font-bold text-white/30 uppercase tracking-widest italic">Nouveau sur Tomobilty ?</p>
+                    <p className="text-[10px] font-bold text-white/30 uppercase tracking-widest italic">Nouveau sur Tommobilty ?</p>
                     <button onClick={() => setMode('register')} className="w-full py-4 border border-white/10 hover:border-[#ff003c] hover:text-[#ff003c] text-white/60 font-black uppercase italic rounded-[2rem] transition-all text-[10px] tracking-[0.2em]">CRÉER UN COMPTE</button>
                   </div>
                 ) : (
@@ -306,7 +306,7 @@ function HomeView({ setView, setSelectedCat }) {
         <div className="absolute top-1/4 left-1/4 w-[500px] h-[500px] bg-[#ff003c]/10 blur-[120px] rounded-full animate-pulse" />
         <div className="absolute bottom-1/4 right-1/4 w-[500px] h-[500px] bg-blue-600/5 blur-[120px] rounded-full animate-pulse" />
         <div className="max-w-7xl w-full z-10 text-center">
-          <motion.h1 initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} className="text-[12vw] font-black italic uppercase leading-none tracking-tighter mb-4 text-transparent stroke-text opacity-20">TOMOBILTY</motion.h1>
+          <motion.h1 initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} className="text-[12vw] font-black italic uppercase leading-none tracking-tighter mb-4 text-transparent stroke-text opacity-20 font-choplin">TOMMOBILTY</motion.h1>
           <motion.h2 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="text-5xl md:text-8xl font-black italic uppercase text-white mb-16 mt-[-6vw]">L'Élite du Car Rental <br /> <span className="text-[#ff003c]">Au Maroc.</span></motion.h2>
           <SearchSection isSticky={false} />
           <div className="mt-20 flex justify-center gap-10 md:gap-24 text-center">
@@ -352,7 +352,7 @@ function HomeView({ setView, setSelectedCat }) {
 
         <section className={`${GLASS} rounded-[4rem] p-16 md:p-32 border-[#ff003c]/20 relative overflow-hidden group text-center`}>
           <div className="absolute top-0 right-0 p-20 opacity-5 group-hover:rotate-12 transition-transform duration-1000"><Award size={400} /></div>
-          <SectionTitle subtitle="Elite Club" title="Points Tomobilty" />
+          <SectionTitle subtitle="Elite Club" title="Points Tommobilty" />
           <p className="text-white/60 font-bold text-xl mb-12 max-w-2xl mx-auto leading-relaxed italic text-center">Chaque kilomètre parcouru se transforme en points <span className="text-white">T-Points</span> pour débloquer l'élite automobile.</p>
           <button className="bg-white text-black px-12 py-5 rounded-2xl font-black uppercase italic hover:bg-[#ff003c] hover:text-white transition-all shadow-2xl">Rejoindre le Cercle</button>
         </section>
@@ -635,7 +635,7 @@ export default function App() {
       <footer className="bg-black border-t border-white/10 py-32 px-6">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-start gap-20">
           <div className="max-w-sm text-center md:text-left mx-auto md:mx-0">
-            <h5 className="text-5xl font-black italic uppercase tracking-tighter mb-8 text-[#ff003c]">TOMOBILTY</h5>
+            <h5 className="text-5xl font-black italic uppercase tracking-tighter mb-8 text-[#ff003c]">TOMMOBILTY</h5>
             <p className="text-[11px] font-black uppercase text-white/20 tracking-[0.4em] leading-loose text-left">Propelled by Speed & Excellence. Le standard absolu de l'élite automobile au Maroc.</p>
           </div>
           <div className="flex gap-24 text-left text-xs font-bold uppercase text-white/30 tracking-widest mx-auto md:mx-0">

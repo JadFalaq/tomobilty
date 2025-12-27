@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import { authAPI } from '@/lib/api';
 import { UserPlus, Check } from 'lucide-react';
@@ -74,7 +73,6 @@ export default function InscriptionPage() {
   if (success) {
     return (
       <div className="min-h-screen flex flex-col bg-primary-950">
-        <Navbar />
         <div className="flex-grow flex items-center justify-center py-20 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
           <div className="max-w-md w-full relative z-10">
             <div className="bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl p-10 ring-1 ring-white/10 text-center">
@@ -111,8 +109,6 @@ export default function InscriptionPage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-primary-950">
-      <Navbar />
-      
       <div className="flex-grow flex items-center justify-center py-20 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
         {/* Background Decor */}
         <div className="absolute inset-0 bg-grain-pattern opacity-10 pointer-events-none"></div>
@@ -127,7 +123,7 @@ export default function InscriptionPage() {
               </div>
               <h2 className="text-3xl font-serif font-bold text-primary-900">Rejoignez l'Excellence</h2>
               <p className="mt-3 text-primary-600">
-                Créez votre compte Tomobilty et accédez à une expérience exclusive.
+                Créez votre compte Tommobilty et accédez à une expérience exclusive.
               </p>
             </div>
 

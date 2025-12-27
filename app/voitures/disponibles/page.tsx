@@ -3,7 +3,6 @@ export const dynamic = 'force-dynamic';
 
 import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import VoitureCard from '@/components/VoitureCard';
 import { voituresAPI } from '@/lib/api';
@@ -91,7 +90,6 @@ function Content() {
 export default function DisponiblesPage() {
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
-      <Navbar />
       <Suspense fallback={<div className="p-8">Chargement…</div>}>
         <Content />
       </Suspense>

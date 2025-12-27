@@ -89,7 +89,7 @@ router.get('/users', (req, res) => {
 router.get('/status', (req, res) => {
   res.json({
     success: true,
-    message: 'Tomobilty API is running successfully!',
+    message: 'Tommobilty API is running successfully!',
     data: {
       timestamp: new Date().toISOString(),
       environment: process.env.NODE_ENV || 'development',

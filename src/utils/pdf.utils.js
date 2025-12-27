@@ -30,11 +30,11 @@ const generateContractPDF = async (contractData, outputPath) => {
       doc.moveDown();
 
       // Company info
-      doc.fontSize(14).text('TOMOBILTY SARL', { underline: true });
+      doc.fontSize(14).text('TOMMOBILTY SARL', { underline: true });
       doc.fontSize(10)
          .text('Adresse: [Adresse de l\'entreprise]')
          .text('Téléphone: [Numéro de téléphone]')
-         .text('Email: contact@tomobilty.com');
+         .text('Email: contact@tommobilty.com');
       doc.moveDown();
 
       // Client info
@@ -99,7 +99,7 @@ const generateContractPDF = async (contractData, outputPath) => {
       
       const signatureY = doc.y;
       doc.text('Le locataire:', 50, signatureY);
-      doc.text('TOMOBILTY:', 300, signatureY);
+      doc.text('TOMMOBILTY:', 300, signatureY);
       
       doc.moveDown(3);
       doc.text('Date et signature:', 50, doc.y);
@@ -146,11 +146,11 @@ const generateInvoicePDF = async (invoiceData, outputPath) => {
       doc.moveDown();
 
       // Company info
-      doc.fontSize(14).text('TOMOBILTY SARL', { underline: true });
+      doc.fontSize(14).text('TOMMOBILTY SARL', { underline: true });
       doc.fontSize(10)
          .text('Adresse: [Adresse de l\'entreprise]')
          .text('Téléphone: [Numéro de téléphone]')
-         .text('Email: contact@tomobilty.com')
+         .text('Email: contact@tommobilty.com')
          .text('TVA: [Numéro TVA]');
       doc.moveDown();
 

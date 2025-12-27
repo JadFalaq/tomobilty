@@ -69,8 +69,8 @@ CMI_GATEWAY_URL=https://payment.cmi.co.ma/fim/est3Dgate
 CMI_CURRENCY=MAD
 
 # URLs publiques (HTTPS requis en production)
-CMI_RETURN_URL=https://tomobilty.com/payments/return
-CMI_IPN_URL=https://api.tomobilty.com/api/payments/cmi/ipn
+CMI_RETURN_URL=https://tommobilty.com/payments/return
+CMI_IPN_URL=https://api.tommobilty.com/api/payments/cmi/ipn
 ```
 
 ### Phase 3: Tests
@@ -283,7 +283,7 @@ export PAYMENT_PROVIDER=stripe
 cp backups/stripe-backup-*/src/services/payment.service.js src/services/
 
 # 3. Redémarrer services
-pm2 restart tomobilty-api
+pm2 restart tommobilty-api
 ```
 
 ## 📞 Support
@@ -313,5 +313,5 @@ pm2 restart tomobilty-api
 - [ ] Équipe informée
 - [ ] Documentation à jour
 
-**Migration CMI v1.0 - TOMOBILTY**  
+**Migration CMI v1.0 - TOMMOBILTY**  
 *Paiements sécurisés en MAD pour le Maroc*

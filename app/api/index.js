@@ -1,4 +1,4 @@
-// API Monolithique Tomobilty - Optimisée pour Vercel
+// API Monolithique Tommobilty - Optimisée pour Vercel
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -40,7 +40,7 @@ app.get('/api/health', (req, res) => {
   res.json({ 
     status: 'OK', 
     timestamp: new Date().toISOString(),
-    service: 'tomobilty-monolith',
+    service: 'tommobilty-monolith',
     platform: 'vercel'
   });
 });
@@ -48,7 +48,7 @@ app.get('/api/health', (req, res) => {
 // Route racine
 app.get('/api', (req, res) => {
   res.json({ 
-    message: 'Tomobilty API - Monolithe sur Vercel',
+    message: 'Tommobilty API - Monolithe sur Vercel',
     version: '2.0.0',
     endpoints: [
       '/api/auth - Authentification',

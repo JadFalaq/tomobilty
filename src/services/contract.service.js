@@ -142,7 +142,7 @@ const signContract = async (contractId, signatureData) => {
     const contractData = JSON.parse(contract.contract_data);
     contractData.signatures = {
       customer: customer_signature,
-      agent: agent_signature || 'TOMOBILTY - Signature électronique'
+      agent: agent_signature || 'TOMMOBILTY - Signature électronique'
     };
 
     // Update contract
@@ -247,7 +247,7 @@ Une caution est exigée et sera restituée après vérification de l'état du v�
 Tout retard dans la restitution du véhicule entraîne une facturation supplémentaire.
 
 9. PANNE OU ACCIDENT
-En cas de panne ou d'accident, le locataire doit immédiatement contacter Tomobilty.
+En cas de panne ou d'accident, le locataire doit immédiatement contacter Tommobilty.
 
 10. RÉSILIATION
 Le contrat peut être résilié par l'une ou l'autre des parties en cas de manquement aux obligations.
@@ -264,7 +264,7 @@ const initializeDefaultTemplate = async () => {
       await prisma.contractTemplate.create({
         data: {
           name: 'Contrat Standard',
-          template: 'Template de contrat de location standard pour Tomobilty',
+          template: 'Template de contrat de location standard pour Tommobilty',
           version: '1.0',
           is_active: true
         }

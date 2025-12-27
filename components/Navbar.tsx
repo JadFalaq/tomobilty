@@ -6,25 +6,26 @@ import { usePathname, useRouter } from 'next/navigation';
 import { User, LogOut, Menu, X, Shield, Trophy } from 'lucide-react';
 import { useState, useEffect } from 'react';
 
+type SessionUser = {
+  role?: string;
+  prenom?: string;
+};
+
 export default function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [user, setUser] = useState<any>(null);
-  const [scrolled, setScrolled] = useState(false);
+  const [user, setUser] = useState<SessionUser | null>(null);
 
   useEffect(() => {
     const userData = localStorage.getItem('user');
     if (userData) {
-      setUser(JSON.parse(userData));
+      try {
+        setUser(JSON.parse(userData) as SessionUser);
+      } catch {
+        setUser(null);
+      }
     }
-    
-    const handleScroll = () => {
-      setScrolled(window.scrollY > 20);
-    };
-    
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
   const handleLogout = () => {
@@ -41,8 +42,8 @@ export default function Navbar() {
           <div className="flex items-center">
             <Link href="/" className="flex items-center group">
               <Image 
-                src="/logo.png" 
-                alt="Tomobilty Logo" 
+                src="/logo_without_bg.png" 
+                alt="Tommobilty Logo" 
                 width={150} 
                 height={60}
                 className="h-12 w-auto transition-transform duration-300 group-hover:scale-105"

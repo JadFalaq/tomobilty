@@ -5,7 +5,7 @@ const prisma = require('./prisma');
 // Initialize system with default data
 const initializeSystem = async () => {
   try {
-    console.log('🚀 Initializing Tomobilty system...');
+    console.log('🚀 Initializing Tommobilty system...');
 
     // Initialize default loyalty tiers
     await loyaltyService.initializeDefaultTiers();

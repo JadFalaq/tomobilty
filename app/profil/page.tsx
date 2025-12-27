@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import { User, Mail, Phone, MapPin, CreditCard, Edit, Save, Gift } from 'lucide-react';
 import { authAPI } from '@/lib/api';
@@ -116,7 +115,6 @@ export default function ProfilPage() {
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col">
-        <Navbar />
         <div className="flex-grow flex items-center justify-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
         </div>
@@ -127,8 +125,6 @@ export default function ProfilPage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
-      <Navbar />
-      
       <div className="flex-grow py-8">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="bg-white rounded-lg shadow-md overflow-hidden">

@@ -120,6 +120,7 @@ p, span, div, a, button, input {
 
 /* App UI helpers */
 .stroke-text { -webkit-text-stroke: 2px rgba(255, 255, 255, 0.1); }
+.font-choplin { font-family: var(--font-choplin), var(--font-playfair), serif !important; text-align: center !important; display: table; margin-left: auto; margin-right: auto; }
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: #000000; }
 ::-webkit-scrollbar-thumb { background: #ff003c; border-radius: 10px; }

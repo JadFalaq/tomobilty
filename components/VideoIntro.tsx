@@ -115,7 +115,7 @@ export default function VideoIntro({ onComplete }: VideoIntroProps) {
         {/* Logo ou texte optionnel */}
         <div className="absolute bottom-20 left-6">
           <h1 className="text-white text-4xl font-bold drop-shadow-lg">
-            Tomobilty
+            Tommobilty
           </h1>
           <p className="text-white/80 text-lg mt-2 drop-shadow-lg">
             Votre partenaire de location au Maroc

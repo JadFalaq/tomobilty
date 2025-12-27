@@ -2,7 +2,7 @@
 
 ## Overview
 
-This is a comprehensive Administrator Management API and Dashboard for the Tomobilty car rental platform. The system provides full CRUD operations and advanced management capabilities with enterprise-level security.
+This is a comprehensive Administrator Management API and Dashboard for the Tommobilty car rental platform. The system provides full CRUD operations and advanced management capabilities with enterprise-level security.
 
 ## 🔐 Security Features
 
@@ -625,4 +625,4 @@ For issues or questions:
 
 **Version:** 1.0.0  
 **Last Updated:** December 2024  
-**Author:** Tomobilty Development Team
+**Author:** Tommobilty Development Team

@@ -21,7 +21,7 @@
 ## Conseils pour une bonne vidéo d'intro
 
 - **Court et percutant** : 5-10 secondes maximum
-- **Logo animé** : Montrez votre logo Tomobilty
+- **Logo animé** : Montrez votre logo Tommobilty
 - **Musique** : Ajoutez une musique de fond courte (attention aux droits)
 - **Qualité** : Utilisez une bonne résolution mais optimisez la taille
 - **Message** : Affichez votre slogan ou message clé

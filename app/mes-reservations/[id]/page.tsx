@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import { reservationsAPI } from '@/lib/api';
 import { formatDate, formatPrice, getStatutBadgeColor, getStatutLabel } from '@/lib/utils';
@@ -65,7 +64,6 @@ export default function ReservationDetailPage() {
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col">
-        <Navbar />
         <div className="flex-grow flex items-center justify-center">
           <div className="text-center">
             <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
@@ -80,7 +78,6 @@ export default function ReservationDetailPage() {
   if (error) {
     return (
       <div className="min-h-screen flex flex-col">
-        <Navbar />
         <div className="flex-grow flex items-center justify-center">
           <div className="text-center">
             <p className="text-red-600 mb-2">{error}</p>
@@ -100,7 +97,6 @@ export default function ReservationDetailPage() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <Navbar />
       <div className="flex-grow bg-cream-50 py-12">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between mb-8">

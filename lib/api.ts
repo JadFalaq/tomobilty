@@ -23,7 +23,7 @@ const api = axios.create({
 // Dev-only baseURL visibility
 if (typeof window !== 'undefined' && process.env.NODE_ENV !== 'production') {
   // eslint-disable-next-line no-console
-  console.log('[API BASE URL]', (api as any).defaults?.baseURL);
+  console.log('[API BASE URL]', api.defaults.baseURL);
 }
 
 // Intercepteur pour ajouter le token à chaque requête
@@ -61,13 +61,13 @@ api.interceptors.response.use(
 
 // API Auth
 export const authAPI = {
-  inscription: (data: any) => api.post('/auth/inscription', data),
-  connexion: (data: any) => api.post('/auth/connexion', data),
+  inscription: (data: unknown) => api.post('/auth/inscription', data),
+  connexion: (data: unknown) => api.post('/auth/connexion', data),
   obtenirProfil: () => api.get('/auth/me'),
-  mettreAJourProfil: (data: any) => api.put('/auth/profile', data),
-  oauthGoogle: (data: any) => api.post('/auth/oauth/google', data),
-  startPhone: (data: any) => api.post('/auth/phone/start', data),
-  verifyPhone: (data: any) => api.post('/auth/phone/verify', data),
+  mettreAJourProfil: (data: unknown) => api.put('/auth/profile', data),
+  oauthGoogle: (data: unknown) => api.post('/auth/oauth/google', data),
+  startPhone: (data: unknown) => api.post('/auth/phone/start', data),
+  verifyPhone: (data: unknown) => api.post('/auth/phone/verify', data),
 };
 
 // API Loyalty
@@ -77,35 +77,39 @@ export const fideliteAPI = {
 
 // API Voitures
 export const voituresAPI = {
-  obtenirVoitures: (params?: any) => api.get('/cars', { params }),
+  obtenirVoitures: (params?: Record<string, unknown>) => api.get('/cars', { params }),
   obtenirVoitureParId: (id: string) => api.get(`/cars/${id}`),
-  verifierDisponibilite: (id: string, data: any) => api.get(`/cars/${id}/availability`, { params: data }),
-  obtenirVoituresDisponibles: async (params?: any) => {
+  verifierDisponibilite: (id: string, data: Record<string, unknown>) => api.get(`/cars/${id}/availability`, { params: data }),
+  obtenirVoituresDisponibles: async (params?: Record<string, unknown>) => {
     const path = '/cars/available';
     if (process.env.NODE_ENV !== 'production') {
       // eslint-disable-next-line no-console
-      console.log('[AVAILABLE CARS] URL:', `${(api as any).defaults?.baseURL}${path}`, 'params:', params);
+      console.log('[AVAILABLE CARS] URL:', `${api.defaults.baseURL}${path}`, 'params:', params);
     }
     try {
       const res = await api.get(path, { params });
       return res;
-    } catch (error: any) {
-      console.error('[AVAILABLE CARS] Error status:', error?.response?.status);
-      console.error('[AVAILABLE CARS] Error body:', error?.response?.data);
-      console.error('[AVAILABLE CARS] Error details:', error?.response?.data?.errors);
-      console.error('[AVAILABLE CARS] Error message:', error?.message);
-      console.error('[AVAILABLE CARS] Error url:', error?.config?.url);
-      throw error;
+    } catch (err: unknown) {
+      if (axios.isAxiosError(err)) {
+        console.error('[AVAILABLE CARS] Error status:', err.response?.status);
+        console.error('[AVAILABLE CARS] Error body:', err.response?.data);
+        console.error('[AVAILABLE CARS] Error details:', (err.response?.data as { errors?: unknown })?.errors);
+        console.error('[AVAILABLE CARS] Error message:', err.message);
+        console.error('[AVAILABLE CARS] Error url:', err.config?.url);
+      } else {
+        console.error('[AVAILABLE CARS] Error:', err);
+      }
+      throw err;
     }
   },
-  creerVoiture: (data: any) => api.post('/cars', data),
-  mettreAJourVoiture: (id: string, data: any) => api.put(`/cars/${id}`, data),
+  creerVoiture: (data: unknown) => api.post('/cars', data),
+  mettreAJourVoiture: (id: string, data: unknown) => api.put(`/cars/${id}`, data),
   supprimerVoiture: (id: string) => api.delete(`/cars/${id}`),
   obtenirSitesRetrait: async () => {
     const path = '/pickup-sites';
     if (process.env.NODE_ENV !== 'production') {
       // eslint-disable-next-line no-console
-      console.log('[PICKUP SITES] URL:', `${(api as any).defaults?.baseURL}${path}`);
+      console.log('[PICKUP SITES] URL:', `${api.defaults.baseURL}${path}`);
     }
     return api.get(path);
   },
@@ -113,38 +117,38 @@ export const voituresAPI = {
 
 // API Réservations
 export const reservationsAPI = {
-  creerReservation: (data: any) => api.post('/bookings', data),
-  confirmerReservation: (id: string, data: any) => api.put(`/bookings/${id}/confirm`, data),
-  confirmerAgence: (id: string, data: any) => api.post(`/bookings/${id}/confirm-agence`, data),
-  obtenirDevis: (data: any) => api.post('/bookings/quote', data),
-  obtenirMesReservations: (params?: any) => api.get('/bookings/me', { params }),
-  obtenirToutesReservations: (params?: any) => api.get('/bookings/admin/all', { params }),
+  creerReservation: (data: unknown) => api.post('/bookings', data),
+  confirmerReservation: (id: string, data: unknown) => api.put(`/bookings/${id}/confirm`, data),
+  confirmerAgence: (id: string, data: unknown) => api.post(`/bookings/${id}/confirm-agence`, data),
+  obtenirDevis: (data: unknown) => api.post('/bookings/quote', data),
+  obtenirMesReservations: (params?: Record<string, unknown>) => api.get('/bookings/me', { params }),
+  obtenirToutesReservations: (params?: Record<string, unknown>) => api.get('/bookings/admin/all', { params }),
   obtenirReservationParId: (id: string) => api.get(`/bookings/me/${id}`),
   annulerReservation: (id: string) => api.delete(`/bookings/me/${id}`),
   telechargerFacture: (id: string) => api.get(`/bookings/me/${id}/invoice`, { responseType: 'blob' }),
-  mettreAJourStatut: (id: string, data: any) => api.put(`/bookings/${id}/status`, data),
+  mettreAJourStatut: (id: string, data: unknown) => api.put(`/bookings/${id}/status`, data),
 };
 
 // API Paiements
 export const paymentsAPI = {
   // Nouvelle API multi-provider
-  createPaymentSession: (data: any) => api.post('/payments/create', data),
+  createPaymentSession: (data: unknown) => api.post('/payments/create', data),
   getPaymentById: (id: string) => api.get(`/payments/${id}`),
   getPaymentsByBooking: (bookingId: string) => api.get(`/payments/booking/${bookingId}`),
   cancelPayment: (id: string) => api.post(`/payments/${id}/cancel`),
-  createRefund: (id: string, data: any) => api.post(`/payments/${id}/refund`, data),
+  createRefund: (id: string, data: unknown) => api.post(`/payments/${id}/refund`, data),
   getProvidersInfo: () => api.get('/payments/providers/info'),
   
   // Legacy support (à supprimer plus tard)
-  createCheckoutSession: (data: any) => api.post('/payments/create-session', data),
+  createCheckoutSession: (data: unknown) => api.post('/payments/create-session', data),
 };
 
 // API Admin (limité aux usages actuels du frontend)
 export const adminAPI = {
-  obtenirVoitures: (params?: any) => api.get('/admin/cars', { params }),
-  obtenirMarques: (params?: any) => api.get('/admin/car-brands', { params }),
-  obtenirReservations: (params?: any) => api.get('/admin/bookings', { params }),
-  obtenirComptesFidelite: (params?: any) => api.get('/admin/loyalty/accounts', { params }),
+  obtenirVoitures: (params?: Record<string, unknown>) => api.get('/admin/cars', { params }),
+  obtenirMarques: (params?: Record<string, unknown>) => api.get('/admin/car-brands', { params }),
+  obtenirReservations: (params?: Record<string, unknown>) => api.get('/admin/bookings', { params }),
+  obtenirComptesFidelite: (params?: Record<string, unknown>) => api.get('/admin/loyalty/accounts', { params }),
 };
 
 // API Protections

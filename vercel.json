@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "name": "tomobilty",
+  "name": "tommobilty",
   "builds": [
     {
       "src": "api/index.js",

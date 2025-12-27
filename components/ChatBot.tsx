@@ -94,7 +94,7 @@ export default function ChatBot() {
                 <MessageCircle className="h-6 w-6" />
               </div>
               <div>
-                <h3 className="font-bold text-sm">Assistant Tomobilty</h3>
+                <h3 className="font-bold text-sm">Assistant Tommobilty</h3>
                 <p className="text-xs text-primary-300">En ligne</p>
               </div>
             </div>

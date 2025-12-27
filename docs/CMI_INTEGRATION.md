@@ -2,7 +2,7 @@
 
 ## 📋 Vue d'ensemble
 
-Cette documentation décrit l'intégration du système de paiement CMI pour remplacer Stripe dans l'application TOMOBILTY. CMI est le centre monétique interbancaire du Maroc qui gère les paiements par carte bancaire.
+Cette documentation décrit l'intégration du système de paiement CMI pour remplacer Stripe dans l'application TOMMOBILTY. CMI est le centre monétique interbancaire du Maroc qui gère les paiements par carte bancaire.
 
 ## 🏗️ Architecture
 
@@ -351,5 +351,5 @@ GET /api/payments/admin/statistics?provider=cmi
 
 ---
 
-**Intégration CMI v1.0 - TOMOBILTY**  
+**Intégration CMI v1.0 - TOMMOBILTY**  
 *Système de paiement sécurisé pour le Maroc*

@@ -2,7 +2,6 @@
 
 import { useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import { reservationsAPI } from '@/lib/api';
 import { CheckCircle, Home, ArrowRight } from 'lucide-react';
@@ -113,7 +112,6 @@ function SuccessContent() {
 export default function PaiementSuccesPage() {
   return (
     <div className="min-h-screen flex flex-col">
-      <Navbar />
       <Suspense fallback={<div className="flex-grow flex items-center justify-center bg-cream-50"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div></div>}>
         <SuccessContent />
       </Suspense>

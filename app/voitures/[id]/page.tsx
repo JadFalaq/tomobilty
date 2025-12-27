@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import DateRangePicker from '@/components/DateRangePicker';
 import { voituresAPI, reservationsAPI, authAPI } from '@/lib/api';
@@ -205,7 +204,7 @@ export default function VoitureDetailPage() {
 
     doc.text("ENTRE LES SOUSSIGNÉS:", 20, y);
     y += lineHeight;
-    doc.text("L'Agence TOMOBILTY (Le Loueur)", 20, y);
+    doc.text("L'Agence TOMMOBILTY (Le Loueur)", 20, y);
     y += lineHeight;
     doc.text(`ET M./Mme ${reservation.nom} ${reservation.prenom} (Le Locataire)`, 20, y);
     y += lineHeight * 2;
@@ -241,7 +240,7 @@ export default function VoitureDetailPage() {
     y += lineHeight * 3;
     doc.text("Le Locataire                     Le Loueur", 20, y);
 
-    doc.save("contrat_location_tomobilty.pdf");
+    doc.save("contrat_location_tommobilty.pdf");
   };
 
   const handleReservation = async () => {
@@ -314,8 +313,6 @@ export default function VoitureDetailPage() {
 
   return (
     <div className="min-h-screen bg-cream-50 flex flex-col">
-      <Navbar />
-      
       <main className="flex-grow container mx-auto px-4 py-8">
         {/* Stepper */}
         <div className="mb-8 flex justify-center">

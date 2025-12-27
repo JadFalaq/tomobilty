@@ -2,7 +2,6 @@
 
 import { Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import { XCircle, ArrowLeft, RefreshCw, Home } from 'lucide-react';
 import Link from 'next/link';
@@ -118,7 +117,6 @@ function CancelContent() {
 export default function PaiementAnnulePage() {
   return (
     <div className="min-h-screen flex flex-col">
-      <Navbar />
       <Suspense fallback={
         <div className="flex-grow flex items-center justify-center bg-cream-50">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>

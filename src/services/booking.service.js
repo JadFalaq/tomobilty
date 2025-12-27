@@ -671,7 +671,7 @@ const startRental = async (bookingId, contractData) => {
     if (booking.rentalContract) {
       await contractService.signContract(booking.rentalContract.id, {
         customer_signature,
-        agent_signature: 'TOMOBILTY - Signature électronique'
+        agent_signature: 'TOMMOBILTY - Signature électronique'
       });
     }
 

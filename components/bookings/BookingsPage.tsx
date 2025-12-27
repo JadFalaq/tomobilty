@@ -74,7 +74,7 @@ export default function BookingsPage() {
               <div className="w-full md:w-64 h-64 md:h-auto overflow-hidden border-r border-white/5 relative">
                 <div className="absolute inset-0">
                   <Image
-                    src={car?.images?.[0]?.image_url || car?.images?.[0] || car?.image || "https://images.unsplash.com/photo-1614200024970-072051666427?q=80&w=400"}
+                    src={car?.images?.[0]?.image_url || car?.images?.[0] || car?.image || "/cars/default.jpg"}
                     alt="Car"
                     fill
                     className="object-cover grayscale group-hover:grayscale-0 transition-all duration-1000"

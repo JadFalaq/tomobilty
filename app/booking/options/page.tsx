@@ -3,7 +3,6 @@ export const dynamic = 'force-dynamic';
 
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Suspense } from 'react';
-import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import { useState, useMemo, useEffect } from 'react';
 import { CreditCard, Shield, Car } from 'lucide-react';
@@ -163,7 +162,6 @@ function Content() {
 export default function BookingOptionsPage() {
   return (
     <div className="min-h-screen bg-cream-50 flex flex-col">
-      <Navbar />
       <Suspense fallback={<div className="p-8">Chargement…</div>}>
         <Content />
       </Suspense>

@@ -3,7 +3,6 @@
 import { useState, Suspense, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import { authAPI } from '@/lib/api';
 import { LogIn, Lock } from 'lucide-react';
@@ -127,8 +126,6 @@ function ConnexionForm() {
 
   return (
     <div className="min-h-screen flex flex-col bg-primary-950">
-      <Navbar />
-      
       <div className="flex-grow flex items-center justify-center py-20 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
         {/* Background Elements */}
         <div className="absolute inset-0 bg-grain-pattern opacity-10 pointer-events-none"></div>

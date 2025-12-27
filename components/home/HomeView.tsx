@@ -149,7 +149,7 @@ export default function HomeView() {
         <div className="absolute top-1/4 left-1/4 w-[500px] h-[500px] bg-[#ff003c]/10 blur-[120px] rounded-full animate-pulse" />
         <div className="absolute bottom-1/4 right-1/4 w-[500px] h-[500px] bg-black/0 blur-[120px] rounded-full animate-pulse" />
         <div className="max-w-7xl w-full z-10 text-center">
-          <motion.h1 initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} className="text-[12vw] font-black italic uppercase leading-none tracking-tighter mb-4 text-transparent stroke-text opacity-20">TOMOBILTY</motion.h1>
+          <motion.h1 initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} className="text-[12vw] font-black italic uppercase leading-none tracking-tighter mb-4 text-transparent stroke-text opacity-20 font-choplin">TOMMOBILTY</motion.h1>
           <motion.h2 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="text-5xl md:text-8xl font-black italic uppercase text-white mb-16 mt-[-6vw]">L'Élite du Car Rental <br /> <span className="text-[#ff003c]">Au Maroc.</span></motion.h2>
           <SearchSection isSticky={false} />
           <div className="mt-20 flex justify-center gap-10 md:gap-24 text-center">
@@ -200,7 +200,7 @@ export default function HomeView() {
         </section>
         <section className="bg-black/60 backdrop-blur-xl border border-white/10 rounded-[4rem] p-16 md:p-32 border-[#ff003c]/20 relative overflow-hidden group text-center">
           <div className="absolute top-0 right-0 p-20 opacity-5 group-hover:rotate-12 transition-transform duration-1000"><Award size={400} /></div>
-          <SectionTitle subtitle="Elite Club" title="Points Tomobilty" />
+          <SectionTitle subtitle="Elite Club" title="Points Tommobilty" />
           <p className="text-white/60 font-bold text-xl mb-12 max-w-2xl mx-auto leading-relaxed italic text-center">Chaque kilomètre parcouru se transforme en points <span className="text-white">T-Points</span> pour débloquer l'élite automobile.</p>
           <button className="bg-white text-black px-12 py-5 rounded-2xl font-black uppercase italic hover:bg-[#ff003c] hover:text-white transition-all shadow-2xl">Rejoindre le Cercle</button>
         </section>

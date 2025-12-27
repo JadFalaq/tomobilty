@@ -3,7 +3,6 @@ export const dynamic = 'force-dynamic';
 
 import { useEffect, useMemo, useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import BookingPriceSummary from '@/components/BookingPriceSummary';
 import { voituresAPI, protectionsAPI, reservationsAPI } from '@/lib/api';
@@ -119,7 +118,7 @@ function Content() {
     try {
       const res = await reservationsAPI.confirmerAgence(String(bookingId), {
         prenom: car?.user?.prenom || 'Client',
-        nom: car?.user?.nom || 'Tomobilty',
+        nom: car?.user?.nom || 'Tommobilty',
         email: car?.user?.email || '',
         pays: 'Maroc',
         telephone: car?.user?.telephone || '',
@@ -323,7 +322,6 @@ function Content() {
 export default function BookingPaymentPage() {
   return (
     <div className="min-h-screen bg-cream-50 flex flex-col">
-      <Navbar />
       <Suspense fallback={<div className="p-8">Chargement…</div>}>
         <Content />
       </Suspense>

@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import { loyaltyAPI } from '@/lib/loyaltyAPI';
 import LoyaltyOverview from '@/components/loyalty/LoyaltyOverview';
@@ -68,7 +67,6 @@ export default function LoyaltyPage() {
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50">
-        <Navbar />
         <div className="flex items-center justify-center min-h-[60vh]">
           <div className="text-center">
             <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto mb-4" />
@@ -83,7 +81,6 @@ export default function LoyaltyPage() {
   if (error) {
     return (
       <div className="min-h-screen bg-gray-50">
-        <Navbar />
         <div className="flex items-center justify-center min-h-[60vh]">
           <div className="text-center">
             <AlertCircle className="w-8 h-8 text-red-500 mx-auto mb-4" />
@@ -110,13 +107,11 @@ export default function LoyaltyPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Navbar />
-      
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            Programme de Fidélité Tomobilty
+            Programme de Fidélité Tommobilty
           </h1>
           <p className="text-gray-600">
             Gagnez des points à chaque location et profitez de réductions exclusives

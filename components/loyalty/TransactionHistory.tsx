@@ -8,7 +8,6 @@ import {
   TrendingDown, 
   Calendar,
   Car,
-  Gift,
   RefreshCw,
   Award,
   Loader2,
@@ -16,8 +15,31 @@ import {
   ChevronDown
 } from 'lucide-react';
 
+type TransactionType = 'EARNED' | 'REDEEMED' | 'BONUS' | 'REFUNDED' | 'EXPIRED';
+
+type TransactionBookingCar = {
+  brand?: { name?: string | null } | null;
+  modele?: string | null;
+};
+
+type TransactionBooking = {
+  id: number;
+  car?: TransactionBookingCar | null;
+};
+
+type LoyaltyTransaction = {
+  id: number;
+  points: number;
+  transaction_type: TransactionType | string;
+  is_positive: boolean;
+  formatted_points: string;
+  description?: string | null;
+  created_at: string;
+  booking?: TransactionBooking | null;
+};
+
 export default function TransactionHistory() {
-  const [transactions, setTransactions] = useState<any[]>([]);
+  const [transactions, setTransactions] = useState<LoyaltyTransaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [filter, setFilter] = useState('all');
@@ -31,7 +53,7 @@ export default function TransactionHistory() {
     try {
       setLoading(true);
       const response = await loyaltyAPI.getTransactionHistory(50);
-      setTransactions(response.data.transactions);
+      setTransactions(response.data.data.transactions);
     } catch (err) {
       setError('Erreur lors du chargement de l\'historique');
       console.error('Failed to load transactions:', err);
@@ -84,7 +106,7 @@ export default function TransactionHistory() {
     });
   };
 
-  const filteredTransactions = transactions.filter((transaction: any) => {
+  const filteredTransactions = transactions.filter((transaction) => {
     if (filter === 'all') return true;
     return transaction.transaction_type === filter;
   });
@@ -170,7 +192,7 @@ export default function TransactionHistory() {
       <div className="bg-white rounded-lg border border-gray-200">
         {filteredTransactions.length > 0 ? (
           <div className="divide-y divide-gray-200">
-            {filteredTransactions.map((transaction: any, index) => {
+            {filteredTransactions.map((transaction) => {
               const Icon = getTransactionIcon(transaction.transaction_type);
               const isPositive = transaction.is_positive;
 

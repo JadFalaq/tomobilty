@@ -49,7 +49,7 @@ export default function LoyaltyExplanation({ tiers }: LoyaltyExplanationProps) {
       <div className="text-center bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl p-8 text-white">
         <Trophy className="w-16 h-16 mx-auto mb-4 text-yellow-300" />
         <h2 className="text-3xl font-bold mb-4">
-          Programme de Fidélité Tomobilty
+          Programme de Fidélité Tommobilty
         </h2>
         <p className="text-xl text-blue-100 max-w-3xl mx-auto">
           Plus vous louez avec nous, plus vous économisez ! 

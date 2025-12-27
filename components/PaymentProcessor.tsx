@@ -5,11 +5,24 @@ import { Loader2, CreditCard, Shield, ArrowRight, AlertCircle } from 'lucide-rea
 import { paymentsAPI } from '@/lib/api';
 import PaymentProviderSelector from './PaymentProviderSelector';
 
+type PaymentProviderName = 'cmi' | 'stripe' | string;
+
+type PaymentSessionData = {
+  payment_url?: string;
+  provider?: PaymentProviderName;
+};
+
+type PaymentSessionResponse = {
+  success: boolean;
+  message?: string;
+  data: PaymentSessionData;
+};
+
 interface PaymentProcessorProps {
   bookingId: number;
   amount: number;
   currency?: string;
-  onSuccess?: (paymentData: any) => void;
+  onSuccess?: (paymentData: PaymentSessionData) => void;
   onError?: (error: string) => void;
   className?: string;
 }
@@ -45,8 +58,9 @@ export default function PaymentProcessor({
 
       const response = await paymentsAPI.createPaymentSession(paymentData);
       
-      if (response.data.success) {
-        const { payment_url, payment_id, provider } = response.data.data;
+      const payload = response.data as PaymentSessionResponse;
+      if (payload.success) {
+        const { payment_url, provider } = payload.data;
         
         // Pour CMI, rediriger vers l'URL de paiement
         if (provider === 'cmi' && payment_url) {
@@ -54,14 +68,14 @@ export default function PaymentProcessor({
         } else if (provider === 'stripe') {
           // Pour Stripe, utiliser la logique existante si nécessaire
           if (onSuccess) {
-            onSuccess(response.data.data);
+            onSuccess(payload.data);
           }
         }
       } else {
-        throw new Error(response.data.message || 'Erreur lors de la création du paiement');
+        throw new Error(payload.message || 'Erreur lors de la création du paiement');
       }
-    } catch (error: any) {
-      const errorMessage = error.response?.data?.message || error.message || 'Erreur lors du paiement';
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Erreur lors du paiement';
       setError(errorMessage);
       if (onError) {
         onError(errorMessage);
@@ -164,7 +178,7 @@ export default function PaymentProcessor({
       {/* Informations supplémentaires */}
       <div className="mt-4 text-center">
         <p className="text-xs text-primary-500">
-          En cliquant sur "Procéder au paiement", vous acceptez nos{' '}
+          En cliquant sur &quot;Procéder au paiement&quot;, vous acceptez nos{' '}
           <a href="/conditions" className="text-primary-600 hover:underline">
             conditions générales
           </a>{' '}

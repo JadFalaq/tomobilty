@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Car, Users, Fuel, Settings, MapPin, ArrowRight } from 'lucide-react';
+import { Users, Fuel, Settings, MapPin, ArrowRight } from 'lucide-react';
 import { formatPrice, getStatutBadgeColor, getStatutLabel } from '@/lib/utils';
 
 interface VoitureCardProps {

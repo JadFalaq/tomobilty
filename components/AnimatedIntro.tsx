@@ -30,8 +30,8 @@ export default function AnimatedIntro({ onComplete }: AnimatedIntroProps) {
         <div className="mb-8 animate-bounce-slow">
           <div className="relative w-48 h-48 mx-auto">
             <Image
-              src="/logo.png"
-              alt="Tomobilty Logo"
+              src="/logo_without_bg.png"
+              alt="Tommobilty Logo"
               width={192}
               height={192}
               className="w-full h-auto drop-shadow-2xl"
@@ -42,7 +42,7 @@ export default function AnimatedIntro({ onComplete }: AnimatedIntroProps) {
 
         {/* Texte animé */}
         <h1 className="text-5xl md:text-7xl font-bold text-white mb-4 animate-slide-up">
-          Tomobilty
+          Tommobilty
         </h1>
         <p className="text-xl md:text-2xl text-primary-100 animate-slide-up animation-delay-200">
           Votre partenaire de location au Maroc

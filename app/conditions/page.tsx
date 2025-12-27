@@ -1,13 +1,10 @@
 'use client';
 
-import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 
 export default function ConditionsPage() {
   return (
     <div className="min-h-screen flex flex-col">
-      <Navbar />
-      
       <main className="flex-grow">
         {/* Hero Section */}
         <section className="bg-primary-900 text-white py-20 relative overflow-hidden">

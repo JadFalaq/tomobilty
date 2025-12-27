@@ -20,12 +20,12 @@ const sendEmailVerification = async (email, token) => {
   const verificationUrl = `${process.env.FRONTEND_URL}/verify-email?token=${token}`;
   
   const mailOptions = {
-    from: `"Tomobilty" <${process.env.EMAIL_USER}>`,
+    from: `"Tommobilty" <${process.env.EMAIL_USER}>`,
     to: email,
-    subject: 'Vérification de votre adresse email - Tomobilty',
+    subject: 'Vérification de votre adresse email - Tommobilty',
     html: `
       <div style="max-width: 600px; margin: 0 auto; font-family: Arial, sans-serif;">
-        <h2 style="color: #2563eb;">Bienvenue sur Tomobilty !</h2>
+        <h2 style="color: #2563eb;">Bienvenue sur Tommobilty !</h2>
         <p>Merci de vous être inscrit sur notre plateforme de location de voitures.</p>
         <p>Pour activer votre compte, veuillez cliquer sur le lien ci-dessous :</p>
         <a href="${verificationUrl}" 
@@ -36,7 +36,7 @@ const sendEmailVerification = async (email, token) => {
         <p>Si vous n'avez pas créé de compte, ignorez cet email.</p>
         <hr style="margin: 24px 0; border: none; border-top: 1px solid #e5e7eb;">
         <p style="color: #6b7280; font-size: 14px;">
-          Tomobilty - Location de voitures au Maroc<br>
+          Tommobilty - Location de voitures au Maroc<br>
           Cet email a été envoyé automatiquement, merci de ne pas y répondre.
         </p>
       </div>
@@ -53,9 +53,9 @@ const sendPasswordResetEmail = async (email, token) => {
   const resetUrl = `${process.env.FRONTEND_URL}/reset-password?token=${token}`;
   
   const mailOptions = {
-    from: `"Tomobilty" <${process.env.EMAIL_USER}>`,
+    from: `"Tommobilty" <${process.env.EMAIL_USER}>`,
     to: email,
-    subject: 'Réinitialisation de votre mot de passe - Tomobilty',
+    subject: 'Réinitialisation de votre mot de passe - Tommobilty',
     html: `
       <div style="max-width: 600px; margin: 0 auto; font-family: Arial, sans-serif;">
         <h2 style="color: #2563eb;">Réinitialisation de mot de passe</h2>
@@ -69,7 +69,7 @@ const sendPasswordResetEmail = async (email, token) => {
         <p>Si vous n'avez pas demandé cette réinitialisation, ignorez cet email.</p>
         <hr style="margin: 24px 0; border: none; border-top: 1px solid #e5e7eb;">
         <p style="color: #6b7280; font-size: 14px;">
-          Tomobilty - Location de voitures au Maroc<br>
+          Tommobilty - Location de voitures au Maroc<br>
           Cet email a été envoyé automatiquement, merci de ne pas y répondre.
         </p>
       </div>
@@ -84,9 +84,9 @@ const sendBookingConfirmation = async (email, booking) => {
   const transporter = createTransporter();
   
   const mailOptions = {
-    from: `"Tomobilty" <${process.env.EMAIL_USER}>`,
+    from: `"Tommobilty" <${process.env.EMAIL_USER}>`,
     to: email,
-    subject: `Confirmation de réservation #${booking.id} - Tomobilty`,
+    subject: `Confirmation de réservation #${booking.id} - Tommobilty`,
     html: `
       <div style="max-width: 600px; margin: 0 auto; font-family: Arial, sans-serif;">
         <h2 style="color: #16a34a;">Réservation confirmée !</h2>
@@ -105,7 +105,7 @@ const sendBookingConfirmation = async (email, booking) => {
         
         <hr style="margin: 24px 0; border: none; border-top: 1px solid #e5e7eb;">
         <p style="color: #6b7280; font-size: 14px;">
-          Tomobilty - Location de voitures au Maroc<br>
+          Tommobilty - Location de voitures au Maroc<br>
           Cet email a été envoyé automatiquement, merci de ne pas y répondre.
         </p>
       </div>
@@ -120,9 +120,9 @@ const sendContractEmail = async (email, contractPath, booking) => {
   const transporter = createTransporter();
   
   const mailOptions = {
-    from: `"Tomobilty" <${process.env.EMAIL_USER}>`,
+    from: `"Tommobilty" <${process.env.EMAIL_USER}>`,
     to: email,
-    subject: `Contrat de location #${booking.id} - Tomobilty`,
+    subject: `Contrat de location #${booking.id} - Tommobilty`,
     html: `
       <div style="max-width: 600px; margin: 0 auto; font-family: Arial, sans-serif;">
         <h2 style="color: #2563eb;">Votre contrat de location</h2>
@@ -137,7 +137,7 @@ const sendContractEmail = async (email, contractPath, booking) => {
         
         <hr style="margin: 24px 0; border: none; border-top: 1px solid #e5e7eb;">
         <p style="color: #6b7280; font-size: 14px;">
-          Tomobilty - Location de voitures au Maroc<br>
+          Tommobilty - Location de voitures au Maroc<br>
           Cet email a été envoyé automatiquement, merci de ne pas y répondre.
         </p>
       </div>

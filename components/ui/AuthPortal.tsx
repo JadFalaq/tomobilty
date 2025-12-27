@@ -64,7 +64,7 @@ export default function AuthPortal({ isOpen, onClose }: Props) {
               <div className="mt-12 pt-8 border-t border-white/5 text-center">
                 {mode === "login" ? (
                   <div className="space-y-4">
-                    <p className="text-[10px] font-bold text-white/30 uppercase tracking-widest italic">Nouveau sur Tomobilty ?</p>
+                    <p className="text-[10px] font-bold text-white/30 uppercase tracking-widest italic">Nouveau sur Tommobilty ?</p>
                     <button onClick={() => setMode("register")} className="w-full py-4 border border-white/10 hover:border-[#ff003c] hover:text-[#ff003c] text-white/60 font-black uppercase italic rounded-[2rem] transition-all text-[10px] tracking-[0.2em]">CRÉER UN COMPTE</button>
                   </div>
                 ) : (

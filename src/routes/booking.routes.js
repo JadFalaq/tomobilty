@@ -10,14 +10,10 @@ const {
   validateDateRange,
   validatePagination,
   sanitizeBookingInput,
-  logBookingOperation,
-  checkBusinessHours
+  logBookingOperation
 } = require('../middlewares/booking.middleware');
 const {
-  validateMainDriverLicense,
   validateAdditionalDriverLicense,
-  checkDriverAge,
-  validateDriverDocuments,
   checkDriverBlacklist,
   rateLimitDriverValidation,
   logDriverValidation

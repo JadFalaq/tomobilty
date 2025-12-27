@@ -1,14 +1,11 @@
 'use client';
 
-import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import { Mail, Phone, MapPin, Send } from 'lucide-react';
 
 export default function ContactPage() {
   return (
     <div className="min-h-screen flex flex-col">
-      <Navbar />
-      
       <main className="flex-grow">
         {/* Hero Section */}
         <section className="bg-primary-900 text-white py-20 relative overflow-hidden">
@@ -53,7 +50,7 @@ export default function ContactPage() {
                     </div>
                     <div>
                       <h3 className="font-bold text-primary-900">Email</h3>
-                      <p className="text-gray-600">contact@tomobilty.ma</p>
+                      <p className="text-gray-600">contact@tommobilty.ma</p>
                       <p className="text-sm text-gray-500">Réponse sous 24h</p>
                     </div>
                   </div>

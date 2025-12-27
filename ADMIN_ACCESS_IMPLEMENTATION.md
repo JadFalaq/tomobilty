@@ -1,7 +1,7 @@
 # Admin Dashboard Access Implementation
 
 ## Overview
-This document describes the role-based admin dashboard access implementation for the Tomobilty platform.
+This document describes the role-based admin dashboard access implementation for the Tommobilty platform.
 
 ## Implementation Summary
 

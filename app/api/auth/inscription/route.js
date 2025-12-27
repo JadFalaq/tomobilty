@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
-import { query } from '../../config/database';
-import { sendEmail } from '../../utils/email';
+import db from '../../../../src/config/database';
+import emailUtil from '../../../../src/utils/email.util';
 
 export async function POST(request) {
   try {
     const { nom, prenom, email, telephone, motDePasse } = await request.json();
+    const { query } = db;
+    const { sendEmailVerification } = emailUtil;
     
     // Vérifier si l'email existe
     const existingUser = await query('SELECT id FROM users WHERE email = $1', [email]);
@@ -39,19 +41,7 @@ export async function POST(request) {
     if (process.env.NODE_ENV !== 'production') {
       console.log(`🔗 Lien de vérification: ${process.env.FRONTEND_URL}/verify-email?token=${token}`);
     } else {
-      const verifyUrl = `${process.env.FRONTEND_URL}/verify-email?token=${token}`;
-      await sendEmail({
-        to: email,
-        subject: 'Vérification de votre compte Tomobilty',
-        html: `
-          <h2>Bienvenue sur Tomobilty !</h2>
-          <p>Merci de vous être inscrit. Veuillez confirmer votre email en cliquant sur le lien ci-dessous :</p>
-          <a href="${verifyUrl}" style="background: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
-            Vérifier mon email
-          </a>
-          <p>Ce lien expire dans 24 heures.</p>
-        `
-      });
+      await sendEmailVerification(email, token);
     }
 
     return NextResponse.json({

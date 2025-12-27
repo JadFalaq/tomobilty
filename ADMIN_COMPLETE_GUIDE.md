@@ -2,7 +2,7 @@
 
 ## Overview
 
-This is a **complete, production-ready admin dashboard** for the Tomobilty car rental platform with:
+This is a **complete, production-ready admin dashboard** for the Tommobilty car rental platform with:
 
 - ✅ **Full CRUD operations** for all 30+ entities
 - ✅ **Advanced statistics** and analytics dashboard

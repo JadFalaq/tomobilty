@@ -68,7 +68,7 @@ export default function AdminLayout({
           <div className="flex justify-between h-16">
             <div className="flex items-center">
               <a href="/admin" className="text-xl font-bold text-black">
-                Tomobilty Admin
+                Tommobilty Admin
               </a>
               <div className="ml-10 flex space-x-2">
                 <a href="/admin" className="px-3 py-2 rounded text-sm font-medium text-black hover:bg-black hover:text-white transition-colors">
