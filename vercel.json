@@ -1,20 +1,20 @@
 {
   "version": 2,
-  "name": "tomobilty",
+  "name": "tommobilty",
   "builds": [
     {
-      "src": "api/index.js",
+      "src": "backend/api/index.js",
       "use": "@vercel/node"
     },
     {
-      "src": "package.json",
+      "src": "frontend/package.json",
       "use": "@vercel/next"
     }
   ],
   "routes": [
     {
       "src": "/api/(.*)",
-      "dest": "/api/index.js"
+      "dest": "/backend/api/index.js"
     },
     {
       "src": "/(.*)",
@@ -33,7 +33,7 @@
     "SUPABASE_ANON_KEY": "@supabase_anon_key"
   },
   "functions": {
-    "api/index.js": {
+    "backend/api/index.js": {
       "maxDuration": 30
     }
   }

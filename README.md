@@ -1,6 +1,6 @@
-# Tomobilty - Plateforme de Location de Voitures au Maroc
+# Tommobilty - Plateforme de Location de Voitures au Maroc
 
-Tomobilty est une plateforme web complète de location de voitures au Maroc, développée avec Next.js (frontend) et Node.js/Express (backend), avec un système de réservation synchronisé pour éviter les conflits.
+Tommobilty est une plateforme web complète de location de voitures au Maroc, développée avec Next.js (frontend) et Node.js/Express (backend), avec un système de réservation synchronisé pour éviter les conflits.
 
 ## 🚀 Fonctionnalités
 
@@ -39,7 +39,7 @@ Tomobilty est une plateforme web complète de location de voitures au Maroc, dé
 1. **Cloner le repository**
 ```bash
 git clone [URL_DU_REPO]
-cd tomobilty
+cd tommobilty
 ```
 
 2. **Installer les dépendances**
@@ -160,7 +160,7 @@ Pour tester l'application, vous pouvez créer des données de test :
 Connectez-vous à MongoDB et exécutez :
 ```javascript
 db.users.updateOne(
-  { email: "admin@tomobilty.ma" },
+  { email: "admin@tommobilty.ma" },
   { $set: { role: "admin" } }
 )
 ```
@@ -201,8 +201,8 @@ Ce projet est sous licence MIT.
 ## 📧 Contact
 
 Pour toute question ou suggestion :
-- Email : contact@tomobilty.ma
-- Site web : https://tomobilty.ma
+- Email : contact@tommobilty.ma
+- Site web : https://tommobilty.ma
 
 ---
 

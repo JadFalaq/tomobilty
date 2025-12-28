@@ -1,0 +1,233 @@
+const express = require('express');
+const bookingController = require('../controllers/booking.controller');
+const { verifyToken, requireAdmin, requireAgent } = require('../middlewares/auth.middleware');
+const { 
+  validateBookingData,
+  validateDriverData,
+  checkBookingOwnership,
+  rateLimitBookingCreation,
+  validateBookingStatus,
+  validateDateRange,
+  validatePagination,
+  sanitizeBookingInput,
+  logBookingOperation
+} = require('../middlewares/booking.middleware');
+const {
+  validateAdditionalDriverLicense,
+  checkDriverBlacklist,
+  rateLimitDriverValidation,
+  logDriverValidation
+} = require('../middlewares/driver.middleware');
+
+const router = express.Router();
+
+/**
+ * Public routes
+ */
+// POST /api/bookings/check-availability
+router.post('/check-availability', 
+  bookingController.checkAvailability
+);
+
+// POST /api/bookings/calculate-price
+router.post('/calculate-price', 
+  bookingController.calculatePrice
+);
+
+// GET /api/cars/available
+// Deprecated: use GET /api/cars/available from car.controller
+
+/**
+ * Protected routes (User must be authenticated)
+ */
+// POST /api/bookings - Create new booking
+router.post('/', 
+  verifyToken,
+  validateBookingData,
+  sanitizeBookingInput,
+  rateLimitBookingCreation,
+  logBookingOperation('CREATE_BOOKING'),
+  bookingController.createBooking
+);
+
+// GET /api/bookings/me - Canonique client: Mes réservations
+router.get('/me', 
+  verifyToken,
+  validatePagination,
+  logBookingOperation('GET_MY_BOOKINGS'),
+  bookingController.getMyBookings
+);
+
+// GET /api/bookings/me/:bookingId - Détail réservation (client)
+router.get('/me/:bookingId', 
+  verifyToken,
+  checkBookingOwnership,
+  logBookingOperation('GET_MY_BOOKING_DETAILS'),
+  bookingController.getMyBookingDetails
+);
+
+// GET /api/bookings/me/:bookingId/invoice - Télécharger facture (client)
+router.get('/me/:bookingId/invoice', 
+  verifyToken,
+  checkBookingOwnership,
+  logBookingOperation('GET_MY_BOOKING_INVOICE'),
+  bookingController.getMyBookingInvoice
+);
+
+// DELETE /api/bookings/me/:bookingId - Annuler réservation (client, EN_ATTENTE uniquement)
+router.delete('/me/:bookingId', 
+  verifyToken,
+  checkBookingOwnership,
+  logBookingOperation('CANCEL_MY_BOOKING'),
+  bookingController.cancelMyBooking
+);
+
+// GET /api/bookings/user/:userId? - Get user bookings
+router.get('/user/:userId?', 
+  verifyToken,
+  validateDateRange,
+  validatePagination,
+  logBookingOperation('GET_USER_BOOKINGS'),
+  bookingController.getUserBookings
+);
+
+// GET /api/bookings/:bookingId - Get booking details
+router.get('/:bookingId', 
+  verifyToken,
+  checkBookingOwnership,
+  logBookingOperation('GET_BOOKING_DETAILS'),
+  bookingController.getBookingById
+);
+
+// PUT /api/bookings/:bookingId - Update booking
+router.put('/:bookingId', 
+  verifyToken,
+  checkBookingOwnership,
+  validateBookingStatus(['EN_ATTENTE']),
+  sanitizeBookingInput,
+  logBookingOperation('UPDATE_BOOKING'),
+  bookingController.updateBooking
+);
+
+// DELETE /api/bookings/:bookingId - Cancel booking
+router.delete('/:bookingId', 
+  verifyToken,
+  checkBookingOwnership,
+  validateBookingStatus(['EN_ATTENTE', 'EN_COURS']),
+  logBookingOperation('CANCEL_BOOKING'),
+  bookingController.cancelBooking
+);
+
+// POST /api/bookings/:bookingId/start - Start rental
+router.post('/:bookingId/start', 
+  verifyToken,
+  requireAdmin, // Only staff can start rentals
+  checkBookingOwnership,
+  validateBookingStatus(['EN_COURS']),
+  logBookingOperation('START_RENTAL'),
+  bookingController.startRental
+);
+
+// POST /api/bookings/:bookingId/complete - Complete rental
+router.post('/:bookingId/complete', 
+  verifyToken,
+  requireAdmin, // Only staff can complete rentals
+  checkBookingOwnership,
+  validateBookingStatus(['EN_COURS']),
+  logBookingOperation('COMPLETE_RENTAL'),
+  bookingController.completeRental
+);
+
+// Quote pricing (public)
+router.post('/quote',
+  bookingController.getQuote
+);
+
+// Apply loyalty to booking
+router.post('/:bookingId/apply-loyalty',
+  verifyToken,
+  checkBookingOwnership,
+  logBookingOperation('APPLY_LOYALTY'),
+  bookingController.applyLoyalty
+);
+
+// Confirm booking for agency payment (no online payment)
+router.post('/:bookingId/confirm-agence',
+  verifyToken,
+  checkBookingOwnership,
+  logBookingOperation('CONFIRM_AGENCE'),
+  bookingController.confirmAgence
+);
+
+// POST /api/bookings/:bookingId/additional-driver - Add additional driver
+router.post('/:bookingId/additional-driver', 
+  verifyToken,
+  checkBookingOwnership,
+  validateBookingStatus(['EN_ATTENTE']),
+  validateDriverData,
+  validateAdditionalDriverLicense,
+  checkDriverBlacklist,
+  rateLimitDriverValidation,
+  logDriverValidation,
+  logBookingOperation('ADD_ADDITIONAL_DRIVER'),
+  bookingController.addAdditionalDriver
+);
+
+// DELETE /api/bookings/:bookingId/additional-driver/:driverId - Remove additional driver
+router.delete('/:bookingId/additional-driver/:driverId', 
+  verifyToken,
+  checkBookingOwnership,
+  validateBookingStatus(['EN_ATTENTE']),
+  logBookingOperation('REMOVE_ADDITIONAL_DRIVER'),
+  bookingController.removeAdditionalDriver
+);
+
+// GET /api/bookings/:bookingId/contract - Get booking contract
+router.get('/:bookingId/contract', 
+  verifyToken,
+  checkBookingOwnership,
+  logBookingOperation('GET_CONTRACT'),
+  bookingController.getBookingContract
+);
+
+// GET /api/bookings/:bookingId/invoice - Get booking invoice
+router.get('/:bookingId/invoice', 
+  verifyToken,
+  checkBookingOwnership,
+  logBookingOperation('GET_INVOICE'),
+  bookingController.getBookingInvoice
+);
+
+/**
+ * Admin routes
+ */
+// GET /api/bookings/admin/all - Get all bookings (admin)
+router.get('/admin/all', 
+  verifyToken,
+  requireAdmin,
+  validateDateRange,
+  validatePagination,
+  logBookingOperation('ADMIN_GET_ALL_BOOKINGS'),
+  bookingController.getAllBookings
+);
+
+// PUT /api/bookings/:bookingId/status - Update booking status (admin)
+router.put('/:bookingId/status', 
+  verifyToken,
+  requireAgent,
+  logBookingOperation('ADMIN_UPDATE_STATUS'),
+  bookingController.updateBookingStatus
+);
+
+// GET /api/bookings/admin/statistics - Get booking statistics (admin)
+router.get('/admin/statistics', 
+  verifyToken,
+  requireAdmin,
+  logBookingOperation('ADMIN_GET_STATISTICS'),
+  bookingController.getBookingStatistics
+);
+
+// Apply error handler at the end
+router.use(bookingController.handleBookingErrors);
+
+module.exports = router;

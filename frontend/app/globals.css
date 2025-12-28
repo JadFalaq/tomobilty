@@ -1,0 +1,163 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --foreground-rgb: 33, 50, 65; /* Dark Navy Text */
+  --background-start-rgb: 246, 243, 239; /* Cream-100 */
+  --background-end-rgb: 255, 255, 255;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --foreground-rgb: 246, 243, 239;
+    --background-start-rgb: 20, 31, 41; /* Navy-950 */
+    --background-end-rgb: 33, 50, 65; /* Navy-900 */
+  }
+}
+
+body {
+  color: rgb(var(--foreground-rgb));
+  background: #000000;
+  min-height: 100vh;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-playfair), serif;
+  letter-spacing: -0.02em;
+}
+
+p, span, div, a, button, input {
+  font-family: var(--font-lato), sans-serif;
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  
+  /* Motif subtil de grain pour un aspect premium */
+  .bg-grain-pattern {
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.05'/%3E%3C/svg%3E");
+  }
+}
+
+/* Payment form inputs visibility fix */
+.payment-form input,
+.payment-form textarea,
+.payment-form select {
+  color: #111827 !important; /* text-gray-900 */
+  background-color: #ffffff !important; /* bg-white */
+}
+.payment-form label {
+  color: #111827 !important;
+}
+.payment-form input::placeholder,
+.payment-form textarea::placeholder {
+  color: #9ca3af !important; /* text-gray-400 */
+}
+.payment-form input:focus,
+.payment-form textarea:focus,
+.payment-form select:focus {
+  color: #111827 !important;
+  background-color: #ffffff !important;
+}
+.payment-form input:disabled,
+.payment-form textarea:disabled,
+.payment-form select:disabled {
+  color: #6b7280 !important; /* text-gray-500 */
+  background-color: #f3f4f6 !important; /* gray-100 */
+}
+
+/* Animations personnalisées */
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  25% {
+    transform: translateY(-20px) rotate(5deg);
+  }
+  50% {
+    transform: translateY(-10px) rotate(-5deg);
+  }
+  75% {
+    transform: translateY(-15px) rotate(3deg);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
+.animate-fade-in {
+  animation: fade-in 0.8s ease-out forwards;
+  opacity: 0;
+}
+
+@keyframes scroll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+.animate-scroll {
+  animation: scroll 40s linear infinite;
+}
+
+.pause-on-hover:hover {
+  animation-play-state: paused;
+}
+
+/* App UI helpers */
+.stroke-text { -webkit-text-stroke: 2px rgba(255, 255, 255, 0.1); }
+.font-choplin { font-family: var(--font-choplin), var(--font-playfair), serif !important; text-align: center !important; display: table; margin-left: auto; margin-right: auto; }
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: #000000; }
+::-webkit-scrollbar-thumb { background: #ff003c; border-radius: 10px; }
+input[type="date"] { accent-color: #ff003c; }
+input[type="date"]::-webkit-calendar-picker-indicator { 
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%23ff003c' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='18' rx='2' ry='2'/%3E%3Cline x1='16' y1='2' x2='16' y2='6'/%3E%3Cline x1='8' y1='2' x2='8' y2='6'/%3E%3Cline x1='3' y1='10' x2='21' y2='10'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 16px 16px;
+  opacity: 1;
+  filter: none;
+  cursor: pointer;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 72px;
+  background: #000000;
+  z-index: 40;
+  pointer-events: none;
+}
+
+@keyframes scroll-down {
+  0% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(6px);
+    opacity: 0;
+  }
+}
+
+.animate-scroll-down {
+  animation: scroll-down 1.5s infinite;
+}
