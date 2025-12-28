@@ -233,6 +233,28 @@ const calculateBusinessDays = (startDate, endDate) => {
   return businessDays;
 };
 
+const buildAvailabilityWhereClause = (startDate, endDate, options = {}) => {
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  const { fuelEnum } = options;
+  return {
+    variantes: {
+      some: {
+        ...(fuelEnum ? { type_carburant: fuelEnum } : {}),
+        bookings: {
+          none: {
+            AND: [
+              { date_debut: { lte: end } },
+              { date_fin: { gte: start } },
+              { status_name: { in: ['EN_ATTENTE', 'EN_COURS'] } }
+            ]
+          }
+        }
+      }
+    }
+  };
+};
+
 /**
  * Check if booking is modifiable
  * @param {Object} booking - Booking object
@@ -291,5 +313,6 @@ module.exports = {
   calculateBusinessDays,
   canModifyBooking,
   generateContractNumber,
-  generateInvoiceNumber
+  generateInvoiceNumber,
+  buildAvailabilityWhereClause
 };

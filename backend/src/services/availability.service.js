@@ -8,7 +8,7 @@ const {
   CarNotAvailableError, 
   MaintenanceConflictError 
 } = require('../errors/booking.errors');
-const { datesOverlap } = require('../utils/booking.utils');
+const { buildAvailabilityWhereClause } = require('../utils/booking.utils');
 
 /**
  * Check if a car is available for the specified dates
@@ -189,9 +189,15 @@ const getAvailableCars = async (filters) => {
       }
     }
 
-    // Get all cars matching basic criteria
+    const availabilityWhere = buildAvailabilityWhereClause(startDate, endDate, {
+      fuelEnum: mapFuelToEnum(fuel)
+    });
+
     const cars = await prisma.car.findMany({
-      where: whereClause,
+      where: {
+        ...whereClause,
+        ...availabilityWhere
+      },
       select: {
         id: true,
         brand_id: true,
@@ -204,47 +210,28 @@ const getAvailableCars = async (filters) => {
         statut: true,
         brand: { select: { name: true } },
         category: { select: { name: true } },
-        images: { select: { image_url: true, is_primary: true } }
+        images: { select: { image_url: true, is_primary: true } },
+        variantes: {
+          select: {
+            id: true,
+            type_carburant: true
+          }
+        }
       },
       orderBy: { prix_par_jour: 'asc' }
     });
 
-    // Filter out cars with conflicts
-    const availableCars = [];
-
-    for (const car of cars) {
-      // Check any variant availability (filter by fuel if provided)
-      const variants = await prisma.varianteCar.findMany({
-        where: { 
-          car_id: car.id,
-          ...(fuel ? { type_carburant: mapFuelToEnum(fuel) } : {})
-        },
-        select: { id: true, type_carburant: true }
-      });
-      let availability = { available: false, reason: null, conflicts: [] };
-      for (const v of variants) {
-        const a = await checkCarAvailability(v.id, startDate, endDate);
-        if (a.available) { availability = a; break; }
+    const numberOfDays = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
+    const result = cars.map(car => ({
+      ...car,
+      pricing: {
+        daily_rate: parseFloat(car.prix_par_jour),
+        total_price: parseFloat(car.prix_par_jour) * numberOfDays,
+        number_of_days: numberOfDays
       }
-      
-      if (availability.available) {
-        // Calculate total price for the period
-        const numberOfDays = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
-        const totalPrice = parseFloat(car.prix_par_jour) * numberOfDays;
+    }));
 
-        availableCars.push({
-          ...car,
-          availability: availability,
-          pricing: {
-            daily_rate: parseFloat(car.prix_par_jour),
-            total_price: totalPrice,
-            number_of_days: numberOfDays
-          }
-        });
-      }
-    }
-
-    return availableCars;
+    return result;
 
   } catch (error) {
     console.error('Error getting available cars:', error);

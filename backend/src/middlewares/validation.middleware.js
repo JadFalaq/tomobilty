@@ -7,8 +7,11 @@ const handleValidationErrors = (req, res, next) => {
   if (!errors.isEmpty()) {
     return res.status(400).json({
       success: false,
-      message: 'Données invalides',
-      errors: errors.array().map(error => ({
+      error: {
+        code: 'VALIDATION_ERROR',
+        message: 'Données invalides'
+      },
+      details: errors.array().map(error => ({
         field: error.path,
         message: error.msg,
         value: error.value

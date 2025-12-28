@@ -4,6 +4,8 @@
 
 const express = require('express');
 const paymentController = require('../controllers/payment.controller');
+const webhookGuard = require('../middlewares/webhookGuard.middleware');
+const { paymentLimiter } = require('../middlewares/rateLimit.middleware');
 const { verifyToken, requireAdmin } = require('../middlewares/auth.middleware');
 
 const router = express.Router();
@@ -22,13 +24,15 @@ router.post('/return', paymentController.handlePaymentReturn);
  * Provider-specific IPN/webhook routes
  */
 // POST /api/payments/cmi/ipn - CMI Instant Payment Notification
-router.post('/cmi/ipn', 
+router.post('/cmi/ipn',
+  webhookGuard((process.env.WEBHOOK_ALLOWED_IPS || '').split(',').filter(Boolean)),
   express.raw({ type: 'application/x-www-form-urlencoded' }),
   paymentController.handleCmiIpn
 );
 
 // POST /api/payments/stripe/webhook - Stripe webhooks (legacy support)
-router.post('/stripe/webhook', 
+router.post('/stripe/webhook',
+  webhookGuard((process.env.WEBHOOK_ALLOWED_IPS || '').split(',').filter(Boolean)),
   express.raw({ type: 'application/json' }),
   paymentController.handleStripeWebhook
 );
@@ -37,8 +41,9 @@ router.post('/stripe/webhook',
  * Protected routes (User must be authenticated)
  */
 // POST /api/payments/create - Create payment session
-router.post('/create', 
+router.post('/create',
   verifyToken,
+  paymentLimiter,
   paymentController.createPaymentSession
 );
 

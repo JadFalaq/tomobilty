@@ -180,7 +180,7 @@ const calculateComprehensivePricing = (params) => {
   const numberOfDays = Math.ceil((new Date(dateFin) - new Date(dateDebut)) / (1000 * 60 * 60 * 24));
   
   // Base calculations
-  const basePrice = calculateBasePrice(parseFloat(car.tarif_journalier), numberOfDays);
+  const basePrice = calculateBasePrice(parseFloat(car.prix_par_jour), numberOfDays);
   const insurancePrice = calculateInsurancePrice(insurance, numberOfDays);
   const additionalDriversPrice = calculateAdditionalDriversFee(additionalDrivers, numberOfDays);
   const fuelSurcharge = calculateFuelSurcharge(numberOfDays, car.fuel_type);
@@ -188,7 +188,7 @@ const calculateComprehensivePricing = (params) => {
   const mileageFeeTotal = Math.round(mileageFeePerDay * numberOfDays * 100) / 100;
   
   // Surcharges
-  const weekendSurcharge = calculateWeekendSurcharge(dateDebut, dateFin, parseFloat(car.tarif_journalier));
+  const weekendSurcharge = calculateWeekendSurcharge(dateDebut, dateFin, parseFloat(car.prix_par_jour));
   const seasonalSurcharge = calculateSeasonalSurcharge(dateDebut, dateFin, basePrice);
   
   // Subtotal before discounts
@@ -233,7 +233,7 @@ const calculateComprehensivePricing = (params) => {
     subtotal: Math.round(subtotal * 100) / 100,
     deposit: deposit,
     totalPrice: Math.round(totalPrice * 100) / 100,
-    dailyRate: parseFloat(car.tarif_journalier)
+    dailyRate: parseFloat(car.prix_par_jour)
   };
 };
 

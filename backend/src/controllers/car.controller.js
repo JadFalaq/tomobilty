@@ -240,22 +240,35 @@ const searchCars = asyncHandler(async (req, res) => {
 // Get car by ID
 const getCarById = asyncHandler(async (req, res) => {
   const { id } = req.params;
+  const { dateDebut, dateFin } = resolveDateParams(req.query);
+  const hasDates = Boolean(dateDebut && dateFin);
+  const startDate = hasDates ? new Date(dateDebut) : null;
+  const endDate = hasDates ? new Date(dateFin) : null;
 
   const car = await prisma.car.findUnique({
     where: { id: parseInt(id) },
-    select: {
-      id: true,
-      brand_id: true,
-      category_id: true,
-      modele: true,
-      transmission: true,
-      nombre_places: true,
-      nombre_portes: true,
-      prix_par_jour: true,
-      statut: true,
+    include: {
       brand: { select: { name: true } },
       category: { select: { name: true } },
-      images: { select: { image_url: true, is_primary: true } }
+      images: { select: { image_url: true, is_primary: true } },
+      variantes: {
+        include: {
+          bookings: {
+            where: hasDates
+              ? {
+                  AND: [
+                    { date_debut: { lte: endDate } },
+                    { date_fin: { gte: startDate } }
+                  ],
+                  status_name: { in: ['EN_ATTENTE', 'EN_COURS'] }
+                }
+              : {
+                  status_name: { in: ['EN_ATTENTE', 'EN_COURS'] }
+                },
+            select: { id: true, date_debut: true, date_fin: true, status_name: true }
+          }
+        }
+      }
     }
   });
 
@@ -263,9 +276,52 @@ const getCarById = asyncHandler(async (req, res) => {
     throw new AppError('Voiture non trouvée', 404, 'CAR_NOT_FOUND');
   }
 
+  const variantsWithAvailability = (car.variantes || []).map(variant => {
+    const overlappingBookings = variant.bookings || [];
+    const available = overlappingBookings.length === 0;
+    const { bookings, ...rest } = variant;
+    return { ...rest, available };
+  });
+  const carAvailable = variantsWithAvailability.some(v => v.available === true);
+
+  const {
+    id: carId,
+    brand_id,
+    category_id,
+    modele,
+    transmission,
+    nombre_places,
+    nombre_portes,
+    prix_par_jour,
+    statut,
+    brand,
+    category,
+    images
+  } = car;
+
   res.json({
     success: true,
-    data: { car }
+    data: {
+      car: {
+        id: carId,
+        brand_id,
+        category_id,
+        modele,
+        transmission,
+        nombre_places,
+        nombre_portes,
+        prix_par_jour,
+        statut,
+        brand,
+        category,
+        images,
+        variantes: variantsWithAvailability,
+        carAvailable,
+        query_range: hasDates
+          ? { date_debut: new Date(dateDebut).toISOString(), date_fin: new Date(dateFin).toISOString() }
+          : null
+      }
+    }
   });
 });
 

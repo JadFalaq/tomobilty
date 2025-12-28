@@ -273,7 +273,7 @@ const createBooking = async (bookingData) => {
       throw new Error('variante_car_id requis');
     }
     const pricing = await calculateBookingPrice({
-      carId: variante.car_id,
+      carId: variante.id,
       dateDebut: date_debut,
       dateFin: date_fin,
       userId: user_id,
@@ -501,7 +501,8 @@ const confirmBooking = async (bookingId, paymentId) => {
   const booking = await prisma.booking.update({
     where: { id: bookingId },
     data: {
-      status_id: confirmedStatus.id
+      status_id: confirmedStatus.id,
+      status_name: 'EN_COURS'
     },
     include: {
       user: true,

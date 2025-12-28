@@ -62,12 +62,14 @@ const register = asyncHandler(async (req, res) => {
   });
 
   // Create loyalty account for new user
-  await prisma.loyaltyAccount.create({
-    data: {
-      user_id: user.id,
-      tier_id: 1 // Bronze tier by default
-    }
-  });
+  try {
+    await prisma.loyaltyAccount.create({
+      data: {
+        user_id: user.id,
+        tier_id: 1
+      }
+    });
+  } catch (_) {}
 
   // Send verification email
   try {
@@ -80,6 +82,14 @@ const register = asyncHandler(async (req, res) => {
   // Generate tokens
   const accessToken = generateAccessToken(user.id);
   const refreshToken = generateRefreshToken(user.id);
+  const refreshHash = await bcrypt.hash(refreshToken, 12);
+  try {
+    await prisma.refreshToken.upsert({
+      where: { user_id: user.id },
+      update: { token_hash: refreshHash },
+      create: { user_id: user.id, token_hash: refreshHash }
+    });
+  } catch (_) {}
 
   res.status(201).json({
     success: true,
@@ -127,6 +137,14 @@ const login = asyncHandler(async (req, res) => {
   // Generate tokens
   const accessToken = generateAccessToken(user.id);
   const refreshToken = generateRefreshToken(user.id);
+  const refreshHash = await bcrypt.hash(refreshToken, 12);
+  try {
+    await prisma.refreshToken.upsert({
+      where: { user_id: user.id },
+      update: { token_hash: refreshHash },
+      create: { user_id: user.id, token_hash: refreshHash }
+    });
+  } catch (_) {}
 
   res.json({
     success: true,
@@ -231,6 +249,12 @@ const googleAuth = asyncHandler(async (req, res) => {
   // Generate tokens
   const accessToken = generateAccessToken(user.id);
   const refreshToken = generateRefreshToken(user.id);
+  const refreshHash = await bcrypt.hash(refreshToken, 12);
+  await prisma.refreshToken.upsert({
+    where: { user_id: user.id },
+    update: { token_hash: refreshHash },
+    create: { user_id: user.id, token_hash: refreshHash }
+  });
 
   res.json({
     success: true,
@@ -588,26 +612,74 @@ const changePassword = asyncHandler(async (req, res) => {
 
 // Refresh token
 const refreshToken = asyncHandler(async (req, res) => {
-  const user = req.user;
+  // Accept refreshToken in body and verify it without requiring access token
+  const { refreshToken: refreshTokenValue } = req.body;
 
-  // Generate new tokens
-  const accessToken = generateAccessToken(user.id);
-  const refreshToken = generateRefreshToken(user.id);
+  if (!refreshTokenValue) {
+    throw new AppError('Refresh token requis', 400, 'MISSING_REFRESH_TOKEN');
+  }
 
-  res.json({
-    success: true,
-    data: {
-      tokens: {
-        access: accessToken,
-        refresh: refreshToken
-      }
+  try {
+    const decoded = verifyToken(refreshTokenValue);
+
+    if (decoded.type !== 'refresh') {
+      throw new AppError('Type de token invalide', 400, 'INVALID_TOKEN_TYPE');
     }
-  });
+
+    // Ensure user exists
+    const user = await prisma.user.findUnique({
+      where: { id: decoded.userId },
+      select: {
+        id: true
+      }
+    });
+
+    if (!user) {
+      throw new AppError('Utilisateur non trouvé', 404, 'USER_NOT_FOUND');
+    }
+
+    const stored = await prisma.refreshToken.findUnique({
+      where: { user_id: user.id },
+      select: { token_hash: true }
+    });
+    if (!stored) {
+      throw new AppError('Refresh token invalide', 401, 'INVALID_REFRESH_TOKEN');
+    }
+    const matches = await bcrypt.compare(refreshTokenValue, stored.token_hash);
+    if (!matches) {
+      throw new AppError('Refresh token déjà utilisé', 401, 'AUTH_REFRESH_REUSED');
+    }
+
+    const access = generateAccessToken(user.id);
+    const refresh = generateRefreshToken(user.id);
+    const newHash = await bcrypt.hash(refresh, 12);
+    await prisma.refreshToken.update({
+      where: { user_id: user.id },
+      data: { token_hash: newHash }
+    });
+
+    res.json({
+      success: true,
+      data: {
+        tokens: {
+          access,
+          refresh
+        }
+      }
+    });
+  } catch (error) {
+    if (error.name === 'TokenExpiredError') {
+      throw new AppError('Refresh token expiré', 401, 'TOKEN_EXPIRED');
+    }
+    throw error;
+  }
 });
 
 // Logout
 const logout = asyncHandler(async (req, res) => {
-  // In a more sophisticated setup, you might want to blacklist the token
+  await prisma.refreshToken.deleteMany({
+    where: { user_id: req.user.id }
+  });
   res.json({
     success: true,
     message: 'Déconnexion réussie'

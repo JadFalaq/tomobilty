@@ -29,9 +29,13 @@ const sendBookingConfirmation = async (bookingId) => {
       where: { id: bookingId },
       include: {
         user: true,
-        car: {
+        varianteCar: {
           include: {
-            brand: true
+            car: {
+              include: {
+                brand: true
+              }
+            }
           }
         },
         status: true
@@ -49,7 +53,7 @@ const sendBookingConfirmation = async (bookingId) => {
       data: {
         customerName: `${booking.user.prenom} ${booking.user.nom}`,
         bookingId: bookingId,
-        carDetails: `${booking.car.brand.name} ${booking.car.modele}`,
+        carDetails: `${booking.varianteCar.car.brand.name} ${booking.varianteCar.car.modele}`,
         startDate: booking.date_debut.toLocaleDateString('fr-FR'),
         endDate: booking.date_fin.toLocaleDateString('fr-FR'),
         pickupLocation: booking.lieu_prise_en_charge || 'À définir',
@@ -87,9 +91,13 @@ const sendPaymentConfirmation = async (paymentId) => {
         booking: {
           include: {
             user: true,
-            car: {
+            varianteCar: {
               include: {
-                brand: true
+                car: {
+                  include: {
+                    brand: true
+                  }
+                }
               }
             }
           }
@@ -112,7 +120,7 @@ const sendPaymentConfirmation = async (paymentId) => {
         amount: parseFloat(payment.amount),
         currency: payment.currency,
         paymentMethod: 'Carte bancaire',
-        carDetails: `${payment.booking.car.brand.name} ${payment.booking.car.modele}`,
+        carDetails: `${payment.booking.varianteCar.car.brand.name} ${payment.booking.varianteCar.car.modele}`,
         paymentDate: payment.updated_at.toLocaleDateString('fr-FR')
       }
     };
@@ -205,9 +213,13 @@ const sendInvoiceEmail = async (invoiceId) => {
         user: true,
         booking: {
           include: {
-            car: {
+            varianteCar: {
               include: {
-                brand: true
+                car: {
+                  include: {
+                    brand: true
+                  }
+                }
               }
             }
           }
@@ -229,7 +241,7 @@ const sendInvoiceEmail = async (invoiceId) => {
         bookingId: invoice.booking_id,
         amount: parseFloat(invoice.amount),
         currency: invoice.currency,
-        carDetails: `${invoice.booking.car.brand.name} ${invoice.booking.car.modele}`,
+        carDetails: `${invoice.booking.varianteCar.car.brand.name} ${invoice.booking.varianteCar.car.modele}`,
         status: invoice.status === 'PAID' ? 'Payée' : 'En attente'
       },
       attachments: invoice.pdf_path ? [
@@ -310,9 +322,13 @@ const sendRentalStartReminder = async (bookingId) => {
       where: { id: bookingId },
       include: {
         user: true,
-        car: {
+        varianteCar: {
           include: {
-            brand: true
+            car: {
+              include: {
+                brand: true
+              }
+            }
           }
         }
       }
@@ -329,7 +345,7 @@ const sendRentalStartReminder = async (bookingId) => {
       data: {
         customerName: `${booking.user.prenom} ${booking.user.nom}`,
         bookingId: bookingId,
-        carDetails: `${booking.car.brand.name} ${booking.car.modele}`,
+        carDetails: `${booking.varianteCar.car.brand.name} ${booking.varianteCar.car.modele}`,
         startDate: booking.date_debut.toLocaleDateString('fr-FR'),
         startTime: booking.date_debut.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
         pickupLocation: booking.lieu_prise_en_charge || 'À définir',
@@ -363,9 +379,13 @@ const sendRentalEndReminder = async (bookingId) => {
       where: { id: bookingId },
       include: {
         user: true,
-        car: {
+        varianteCar: {
           include: {
-            brand: true
+            car: {
+              include: {
+                brand: true
+              }
+            }
           }
         }
       }
@@ -382,7 +402,7 @@ const sendRentalEndReminder = async (bookingId) => {
       data: {
         customerName: `${booking.user.prenom} ${booking.user.nom}`,
         bookingId: bookingId,
-        carDetails: `${booking.car.brand.name} ${booking.car.modele}`,
+        carDetails: `${booking.varianteCar.car.brand.name} ${booking.varianteCar.car.modele}`,
         endDate: booking.date_fin.toLocaleDateString('fr-FR'),
         endTime: booking.date_fin.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
         returnLocation: booking.lieu_retour || booking.lieu_prise_en_charge || 'À définir',
@@ -416,9 +436,13 @@ const sendReviewRequest = async (bookingId) => {
       where: { id: bookingId },
       include: {
         user: true,
-        car: {
+        varianteCar: {
           include: {
-            brand: true
+            car: {
+              include: {
+                brand: true
+              }
+            }
           }
         }
       }
@@ -435,7 +459,7 @@ const sendReviewRequest = async (bookingId) => {
       data: {
         customerName: `${booking.user.prenom} ${booking.user.nom}`,
         bookingId: bookingId,
-        carDetails: `${booking.car.brand.name} ${booking.car.modele}`,
+        carDetails: `${booking.varianteCar.car.brand.name} ${booking.varianteCar.car.modele}`,
         reviewUrl: `${process.env.FRONTEND_URL}/review/${bookingId}`
       }
     };

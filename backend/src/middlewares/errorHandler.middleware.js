@@ -1,28 +1,28 @@
 const errorHandler = (err, req, res, next) => {
-  console.error('Error:', err);
+  const status = err.statusCode || 500;
+  try {
+    req.log?.error({ err, requestId: req.id });
+  } catch (_) {}
 
   // Prisma errors
   if (err.code === 'P2002') {
     return res.status(409).json({
       success: false,
-      message: 'Une entrée avec ces données existe déjà',
-      error: 'DUPLICATE_ENTRY'
+      error: { code: 'DUPLICATE_ENTRY', message: 'Une entrée avec ces données existe déjà' }
     });
   }
 
   if (err.code === 'P2025') {
     return res.status(404).json({
       success: false,
-      message: 'Ressource non trouvée',
-      error: 'NOT_FOUND'
+      error: { code: 'NOT_FOUND', message: 'Ressource non trouvée' }
     });
   }
 
   if (err.code && err.code.startsWith('P')) {
     return res.status(400).json({
       success: false,
-      message: 'Erreur de base de données',
-      error: 'DATABASE_ERROR'
+      error: { code: 'DATABASE_ERROR', message: 'Erreur de base de données' }
     });
   }
 
@@ -30,16 +30,14 @@ const errorHandler = (err, req, res, next) => {
   if (err.name === 'JsonWebTokenError') {
     return res.status(401).json({
       success: false,
-      message: 'Token invalide',
-      error: 'INVALID_TOKEN'
+      error: { code: 'INVALID_TOKEN', message: 'Token invalide' }
     });
   }
 
   if (err.name === 'TokenExpiredError') {
     return res.status(401).json({
       success: false,
-      message: 'Token expiré',
-      error: 'EXPIRED_TOKEN'
+      error: { code: 'EXPIRED_TOKEN', message: 'Token expiré' }
     });
   }
 
@@ -47,8 +45,7 @@ const errorHandler = (err, req, res, next) => {
   if (err.name === 'ValidationError') {
     return res.status(400).json({
       success: false,
-      message: 'Données invalides',
-      error: 'VALIDATION_ERROR',
+      error: { code: 'VALIDATION_ERROR', message: 'Données invalides' },
       details: err.details
     });
   }
@@ -57,16 +54,14 @@ const errorHandler = (err, req, res, next) => {
   if (err.code === 'LIMIT_FILE_SIZE') {
     return res.status(400).json({
       success: false,
-      message: 'Fichier trop volumineux',
-      error: 'FILE_TOO_LARGE'
+      error: { code: 'FILE_TOO_LARGE', message: 'Fichier trop volumineux' }
     });
   }
 
   if (err.code === 'LIMIT_FILE_COUNT') {
     return res.status(400).json({
       success: false,
-      message: 'Trop de fichiers',
-      error: 'TOO_MANY_FILES'
+      error: { code: 'TOO_MANY_FILES', message: 'Trop de fichiers' }
     });
   }
 
@@ -74,8 +69,7 @@ const errorHandler = (err, req, res, next) => {
   if (err.type === 'StripeCardError') {
     return res.status(400).json({
       success: false,
-      message: 'Erreur de carte bancaire',
-      error: 'CARD_ERROR',
+      error: { code: 'CARD_ERROR', message: 'Erreur de carte bancaire' },
       details: err.message
     });
   }
@@ -83,8 +77,7 @@ const errorHandler = (err, req, res, next) => {
   if (err.type === 'StripeInvalidRequestError') {
     return res.status(400).json({
       success: false,
-      message: 'Requête de paiement invalide',
-      error: 'PAYMENT_ERROR'
+      error: { code: 'PAYMENT_ERROR', message: 'Requête de paiement invalide' }
     });
   }
 
@@ -92,18 +85,20 @@ const errorHandler = (err, req, res, next) => {
   if (err.statusCode) {
     return res.status(err.statusCode).json({
       success: false,
-      message: err.message || 'Erreur de l\'application',
-      error: err.code || 'APPLICATION_ERROR'
+      error: {
+        code: err.code || 'APPLICATION_ERROR',
+        message: err.message || 'Erreur de l\'application'
+      }
     });
   }
 
   // Default server error
-  res.status(500).json({
+  res.status(status).json({
     success: false,
-    message: process.env.NODE_ENV === 'production' 
-      ? 'Erreur interne du serveur' 
-      : err.message,
-    error: 'INTERNAL_SERVER_ERROR',
+    error: {
+      code: 'INTERNAL_ERROR',
+      message: process.env.NODE_ENV === 'production' ? 'Erreur interne du serveur' : (err.message || 'Unexpected error')
+    },
     ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
   });
 };

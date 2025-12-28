@@ -28,23 +28,34 @@ const createPaymentSession = async (bookingId, bookingData, providerName = null)
     const provider = PaymentProviderFactory.createProvider(providerName);
     const currentProvider = providerName || process.env.PAYMENT_PROVIDER || 'cmi';
 
-    // Create payment record first
-    const payment = await prisma.payment.create({
-      data: {
+    // Idempotency: reuse existing CREATED/PENDING payment for same booking+provider
+    let payment = await prisma.payment.findFirst({
+      where: {
         booking_id: bookingId,
-        user_id: user.id,
-        amount: pricing.totalPrice,
-        currency: 'MAD',
-        status: 'CREATED',
         provider: currentProvider,
-        metadata: JSON.stringify({
-          booking_reference: metadata.booking_reference,
-          car_model: `${car.brand.name} ${car.modele}`,
-          date_debut: metadata.date_debut,
-          date_fin: metadata.date_fin
-        })
+        status: { in: ['CREATED', 'PENDING'] }
       }
     });
+
+    if (!payment) {
+      // Create payment record
+      payment = await prisma.payment.create({
+        data: {
+          booking_id: bookingId,
+          user_id: user.id,
+          amount: pricing.totalPrice,
+          currency: 'MAD',
+          status: 'CREATED',
+          provider: currentProvider,
+          metadata: JSON.stringify({
+            booking_reference: metadata.booking_reference,
+            car_model: `${car.brand.name} ${car.modele}`,
+            date_debut: metadata.date_debut,
+            date_fin: metadata.date_fin
+          })
+        }
+      });
+    }
 
     // Prepare order data for provider
     const orderData = {
@@ -59,7 +70,29 @@ const createPaymentSession = async (bookingId, bookingData, providerName = null)
       ipnUrl: `${process.env.BACKEND_URL || 'http://localhost:3001'}/api/payments/${currentProvider}/ipn`
     };
 
-    // Create payment session via provider
+    // If existing payment already has a session, reuse it
+    if (payment.provider_session_id && payment.provider_payment_id) {
+      return {
+        payment_id: payment.id,
+        session_id: payment.provider_session_id,
+        session_url: (await (async () => {
+          // We don't persist redirectUrl; providers should be able to reconstruct or client can already have it
+          // Fallback: return a generic URL if provider supports retrieval
+          try {
+            const details = await provider.getSessionRedirectUrl?.(payment.provider_session_id);
+            return details || null;
+          } catch (_) {
+            return null;
+          }
+        })()) || null,
+        provider_ref: payment.provider_payment_id,
+        amount: Number(payment.amount),
+        currency: payment.currency,
+        provider: currentProvider
+      };
+    }
+
+    // Otherwise create payment session via provider and update existing row
     const sessionResult = await provider.createPaymentSession(orderData);
 
     // Update payment with session details
@@ -113,7 +146,7 @@ const handlePaymentReturn = async (request, providerName) => {
         booking: {
           include: {
             user: true,
-            car: { include: { brand: true } }
+            varianteCar: { include: { car: { include: { brand: true } } } }
           }
         }
       }
@@ -171,7 +204,7 @@ const handlePaymentNotification = async (request, providerName) => {
         booking: {
           include: {
             user: true,
-            car: { include: { brand: true } }
+            varianteCar: { include: { car: { include: { brand: true } } } }
           }
         }
       }
@@ -201,16 +234,9 @@ const handlePaymentNotification = async (request, providerName) => {
       'Payment processed via IPN'
     );
 
-    // Execute post-payment workflow if payment is successful
-    let workflowResult = null;
-    if (updatedPayment.status === 'COMPLETED') {
-      workflowResult = await executePostPaymentWorkflow(payment.booking_id, payment.id);
-    }
-
     return {
       payment: updatedPayment,
       booking: payment.booking,
-      workflow_result: workflowResult,
       should_ack: notificationResult.shouldAck,
       ack_response: notificationResult.ackResponse
     };
@@ -230,9 +256,12 @@ const handlePaymentNotification = async (request, providerName) => {
  * @returns {Promise<Object>} Updated payment
  */
 const updatePaymentStatus = async (paymentId, status, transactionId = null, message = null) => {
-  const normalized = normalizePaymentStatus(status);
+  const s = (status || '').toUpperCase();
+  const dbStatuses = ['COMPLETED', 'FAILED', 'CANCELED', 'PENDING', 'REFUNDED'];
+  const normalized = dbStatuses.includes(s) ? s : normalizePaymentStatus(status);
+  const safeStatus = dbStatuses.includes(normalized) ? normalized : 'PENDING';
   const updateData = {
-    status: normalized,
+    status: safeStatus,
     metadata: null
   };
 
@@ -252,18 +281,6 @@ const updatePaymentStatus = async (paymentId, status, transactionId = null, mess
     status_message: message
   });
 
-  // Update booking payment status if payment is completed
-  if (normalized === 'COMPLETED') {
-    await prisma.booking.update({
-      where: { id: currentPayment.booking_id },
-      data: {
-        paiement_effectue: true,
-        montant_paye: currentPayment.amount,
-        mode_paiement: 'EN_LIGNE'
-      }
-    });
-  }
-
   return await prisma.payment.update({
     where: { id: paymentId },
     data: updateData,
@@ -271,7 +288,7 @@ const updatePaymentStatus = async (paymentId, status, transactionId = null, mess
       booking: {
         include: {
           user: true,
-          car: { include: { brand: true } }
+          varianteCar: { include: { car: { include: { brand: true } } } }
         }
       }
     }
@@ -288,9 +305,13 @@ const executePostPaymentWorkflow = async (bookingId, paymentId) => {
   try {
     // Import services (avoid circular dependencies)
     const bookingService = require('./booking.service');
-    
-    // Execute the post-payment workflow from booking service
-    return await bookingService.executePostPaymentWorkflow(bookingId, paymentId);
+    const booking = await prisma.booking.findUnique({
+      where: { id: bookingId }
+    });
+    if (!booking) {
+      return { error: `Booking ${bookingId} not found`, workflow_completed: false };
+    }
+    return await bookingService.executePostPaymentWorkflow(booking, paymentId);
     
   } catch (error) {
     console.error('Error in post-payment workflow:', error);
@@ -395,9 +416,13 @@ const getPaymentStatus = async (paymentId) => {
                 email: true
               }
             },
-            car: {
+            varianteCar: {
               include: {
-                brand: true
+                car: {
+                  include: {
+                    brand: true
+                  }
+                }
               }
             }
           }

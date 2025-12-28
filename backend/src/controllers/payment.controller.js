@@ -21,13 +21,14 @@ const createPaymentSession = asyncHandler(async (req, res) => {
       user_id: req.user.id
     },
     include: {
-      car: {
+      varianteCar: {
         include: {
-          brand: true
+          car: { include: { brand: true } }
         }
       },
       user: {
         select: {
+          id: true,
           email: true,
           nom: true,
           prenom: true
@@ -66,7 +67,7 @@ const createPaymentSession = asyncHandler(async (req, res) => {
     // Prepare booking data for payment service
     const bookingData = {
       pricing: { totalPrice: parseFloat(amount) },
-      car: booking.car,
+      car: booking.varianteCar.car,
       user: booking.user,
       metadata: {
         booking_reference: `BK-${booking.id}`,
@@ -157,7 +158,13 @@ const handlePaymentReturn = asyncHandler(async (req, res) => {
  */
 const handleCmiIpn = asyncHandler(async (req, res) => {
   try {
-    const notificationResult = await paymentService.handlePaymentNotification(req, 'cmi');
+    let requestObj = req;
+    if (Buffer.isBuffer(req.body)) {
+      const raw = req.body.toString('utf8');
+      const params = Object.fromEntries(new URLSearchParams(raw));
+      requestObj = { ...req, body: params };
+    }
+    const notificationResult = await paymentService.handlePaymentNotification(requestObj, 'cmi');
 
     console.log('📨 CMI IPN processed:', {
       booking_id: notificationResult.booking?.id,

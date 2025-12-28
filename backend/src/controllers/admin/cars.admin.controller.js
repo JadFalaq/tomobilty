@@ -1,16 +1,22 @@
 const { asyncHandler } = require('../../middlewares/errorHandler.middleware');
+const { buildAvailabilityWhereClause } = require('../../utils/booking.utils');
 const { listEntities, getEntityById, createEntity, updateEntity, deleteEntity, validateRequiredFields, whitelistFields } = require('../../utils/crudHelpers');
 
 const allowedFields = ['brand_id', 'category_id', 'modele', 'transmission', 'nombre_places', 'nombre_portes', 'prix_par_jour', 'statut'];
 
 const listCars = asyncHandler(async (req, res) => {
-  const { page, pageSize, search, brand_id, category_id, statut, sortBy, sortOrder } = req.query;
+  const { page, pageSize, search, brand_id, category_id, statut, sortBy, sortOrder, date_debut, date_fin } = req.query;
   
   const filters = {};
   if (brand_id) filters.brand_id = parseInt(brand_id);
   if (category_id) filters.category_id = parseInt(category_id);
   if (statut) filters.statut = statut;
   // removed filters: disponible, ville
+  if (date_debut && date_fin) {
+    const startDate = new Date(date_debut);
+    const endDate = new Date(date_fin);
+    Object.assign(filters, buildAvailabilityWhereClause(startDate, endDate));
+  }
 
   const result = await listEntities('car', {
     page,

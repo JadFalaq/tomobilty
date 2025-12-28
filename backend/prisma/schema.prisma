@@ -28,6 +28,7 @@ model User {
   notifications              Notification[]
   oauthAccounts              OauthAccount[]
   payments                   Payment[]
+  refreshTokens              RefreshToken[]
   reviews                    Review[]
   adminSettings              AdminSettings?
 
@@ -481,6 +482,19 @@ model SystemSetting {
   updated_by Int?
 
   @@map("system_settings")
+}
+
+model RefreshToken {
+  id          Int      @id @default(autoincrement())
+  user_id     Int
+  token_hash  String   @db.VarChar(255)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @default(now()) @updatedAt
+  user        User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  
+  @@unique([user_id])
+  @@index([user_id])
+  @@map("refresh_token")
 }
 
 enum Role {
