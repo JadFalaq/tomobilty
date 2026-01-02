@@ -379,6 +379,7 @@ const getMyBookingDetails = asyncHandler(async (req, res) => {
     date_fin: booking.date_fin,
     prix_total: booking.prix_total,
     status: { name: booking.status?.name || booking.status_name },
+    statut: booking.status?.name || booking.status_name,
     mode_paiement: booking.mode_paiement,
     date_creation: booking.date_creation,
     car: car ? {
@@ -388,7 +389,16 @@ const getMyBookingDetails = asyncHandler(async (req, res) => {
       category: car.category ? { name: car.category.name } : null,
       primaryImage: primaryImage ? { image_url: primaryImage.image_url, alt_text: primaryImage.alt_text || null } : null
     } : null,
+    vehicle: car ? {
+      id: car.id,
+      modele: car.modele,
+      brand: { name: car.brand?.name },
+      category: car.category ? { name: car.category.name } : null,
+      primaryImage: primaryImage ? { image_url: primaryImage.image_url, alt_text: primaryImage.alt_text || null } : null
+    } : null,
     protection: booking.protection ? { id: booking.protection.id, name: booking.protection.name, price: booking.protection.frais_par_jour } : null,
+    pickup_site: booking.lieu_prise_en_charge ? { name: booking.lieu_prise_en_charge } : null,
+    return_site: booking.lieu_retour ? { name: booking.lieu_retour } : null,
     km_option: meta.mileage_option || meta.km_option || null,
     breakdown_lines: meta.breakdown_lines || meta.quote?.breakdown_lines || [],
     caution_amount: meta.caution_amount || meta.quote?.caution_amount || booking.caution_payee || 0,

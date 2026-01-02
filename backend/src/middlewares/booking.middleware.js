@@ -3,6 +3,7 @@
  */
 
 const { validateBookingDates, validateDriverLicense } = require('../utils/booking.utils');
+const prisma = require('../config/prisma');
 const bookingService = require('../services/booking.service');
 
 /**
@@ -142,6 +143,13 @@ const checkBookingOwnership = async (req, res, next) => {
   try {
     const bookingId = parseInt(req.params.bookingId || req.params.id);
     const userId = req.user.id;
+    if (isNaN(bookingId) || bookingId < 1) {
+      return res.status(400).json({
+        success: false,
+        message: 'ID de réservation invalide',
+        code: 'INVALID_BOOKING_ID'
+      });
+    }
 
     // Admin can access any booking
     if (req.user.role === 'ADMIN') {
@@ -162,6 +170,13 @@ const checkBookingOwnership = async (req, res, next) => {
     next();
 
   } catch (error) {
+    if (error.name === 'BookingNotFoundError' || error.code === 'BOOKING_NOT_FOUND') {
+      return res.status(404).json({
+        success: false,
+        message: 'Réservation introuvable',
+        code: 'BOOKING_NOT_FOUND'
+      });
+    }
     if (error.message.includes('Accès non autorisé')) {
       return res.status(403).json({
         success: false,
@@ -169,9 +184,30 @@ const checkBookingOwnership = async (req, res, next) => {
       });
     }
 
+    try {
+      const bookingLight = await prisma.booking.findUnique({
+        where: { id: parseInt(req.params.bookingId || req.params.id) },
+        select: { user_id: true }
+      });
+      if (!bookingLight) {
+        return res.status(404).json({
+          success: false,
+          message: 'Réservation introuvable',
+          code: 'BOOKING_NOT_FOUND'
+        });
+      }
+      if (req.user.role !== 'ADMIN' && bookingLight.user_id !== req.user.id) {
+        return res.status(403).json({
+          success: false,
+          message: 'Accès non autorisé à cette réservation'
+        });
+      }
+    } catch (_) {}
+
     return res.status(500).json({
       success: false,
-      message: 'Erreur lors de la vérification de la réservation'
+      message: 'Erreur lors de la vérification de la réservation',
+      code: 'UNKNOWN_ERROR'
     });
   }
 };
