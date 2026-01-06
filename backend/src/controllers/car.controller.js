@@ -137,6 +137,73 @@ const getCars = asyncHandler(async (req, res) => {
   });
 });
 
+// Get least demanded cars based on bookings count (excluding cancelled)
+const getLeastDemandedCars = asyncHandler(async (req, res) => {
+  const {
+    page = 1,
+    limit = 6
+  } = req.query;
+
+  // Fetch cars with variants and bookings to compute demand count
+  const cars = await prisma.car.findMany({
+    where: { statut: 'DISPONIBLE' },
+    select: {
+      id: true,
+      brand_id: true,
+      category_id: true,
+      modele: true,
+      transmission: true,
+      nombre_places: true,
+      nombre_portes: true,
+      prix_par_jour: true,
+      statut: true,
+      brand: { select: { name: true } },
+      category: { select: { name: true } },
+      images: { select: { image_url: true, is_primary: true } },
+      variantes: {
+        select: {
+          id: true,
+          bookings: {
+            where: {
+              status_name: { not: 'ANNULE' }
+            },
+            select: { id: true }
+          }
+        }
+      }
+    }
+  });
+
+  const carsWithDemand = cars.map(car => {
+    const demand_count = (car.variantes || []).reduce((acc, v) => acc + (v.bookings?.length || 0), 0);
+    const { variantes, ...rest } = car;
+    return { ...rest, demand_count };
+  });
+
+  // Sort ascending by demand_count to surface least demanded first
+  carsWithDemand.sort((a, b) => a.demand_count - b.demand_count || a.id - b.id);
+
+  const total = carsWithDemand.length;
+  const p = parseInt(page);
+  const l = parseInt(limit);
+  const start = (p - 1) * l;
+  const paginated = carsWithDemand.slice(start, start + l);
+
+  res.set('Cache-Control', 'no-store');
+  res.json({
+    success: true,
+    data: {
+      cars: paginated,
+      pagination: {
+        page: p,
+        limit: l,
+        total,
+        pages: Math.ceil(total / l)
+      }
+    }
+  });
+});
+
 // Search cars with advanced filters
 const searchCars = asyncHandler(async (req, res) => {
   const {
@@ -762,6 +829,7 @@ const deleteCarImage = asyncHandler(async (req, res) => {
 
 module.exports = {
   getCars,
+  getLeastDemandedCars,
   searchCars,
   getCarById,
   checkAvailability,

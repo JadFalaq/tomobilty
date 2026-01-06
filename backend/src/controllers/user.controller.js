@@ -11,20 +11,6 @@ const getProfile = asyncHandler(async (req, res) => {
           tier: true
         }
       }
-    },
-    select: {
-      id: true,
-      email: true,
-      nom: true,
-      prenom: true,
-      telephone: true,
-      adresse: true,
-      role: true,
-      email_verified: true,
-      phone_verified: true,
-      permis_conduire: true,
-      date_creation: true,
-      loyaltyAccount: true
     }
   });
 
@@ -36,16 +22,14 @@ const getProfile = asyncHandler(async (req, res) => {
 
 // Update user profile
 const updateProfile = asyncHandler(async (req, res) => {
-  const { nom, prenom, telephone, adresse, permis_conduire } = req.body;
+  const { nom, prenom, telephone } = req.body;
 
   const user = await prisma.user.update({
     where: { id: req.user.id },
     data: {
       ...(nom && { nom }),
       ...(prenom && { prenom }),
-      ...(telephone && { telephone }),
-      ...(adresse && { adresse }),
-      ...(permis_conduire && { permis_conduire })
+      ...(telephone && { telephone })
     },
     select: {
       id: true,
@@ -53,11 +37,10 @@ const updateProfile = asyncHandler(async (req, res) => {
       nom: true,
       prenom: true,
       telephone: true,
-      adresse: true,
       role: true,
       email_verified: true,
       phone_verified: true,
-      permis_conduire: true
+      date_creation: true
     }
   });
 

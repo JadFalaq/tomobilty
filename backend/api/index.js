@@ -24,6 +24,8 @@ const app = express();
 // Security middleware
 app.use(helmet());
 
+app.set('etag', false);
+
 // Request logging with request id
 const requestLogger = require('../src/middlewares/requestLogger.middleware');
 app.use(requestLogger);
@@ -33,6 +35,8 @@ const allowedOrigins = [
   process.env.FRONTEND_URL,
   'http://localhost:3000',
   'http://localhost:3001',
+  'http://localhost:5173',
+  'http://localhost:4173',
 ].filter(Boolean);
 const corsOptions = {
   origin: (origin, callback) => {

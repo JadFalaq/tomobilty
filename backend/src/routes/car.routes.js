@@ -16,6 +16,7 @@ router.get('/search', validateCarFilters, optionalAuth, carController.searchCars
 router.get('/brands', carController.getBrands);
 router.get('/categories', carController.getCategories);
 router.get('/available', carController.getAvailableCars);
+router.get('/least-demanded', optionalAuth, carController.getLeastDemandedCars);
 router.get('/:id', validateId, optionalAuth, carController.getCarById);
 router.get('/:id/availability', validateId, carController.checkAvailability);
 
