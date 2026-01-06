@@ -184,17 +184,20 @@ function Navbar({ currentView, setView, onOpenAuth, user, onLogout }) {
           <button onClick={() => setView('home')} className={`hover:text-[#ff003c] transition-colors ${currentView === 'home' ? 'text-[#ff003c]' : ''}`}>Accueil</button>
           <button onClick={() => setView('cars')} className={`hover:text-[#ff003c] transition-colors ${currentView === 'cars' ? 'text-[#ff003c]' : ''}`}>Nos Voitures</button>
           {user && (
-            <>
-              <button onClick={() => setView('bookings')} className={`hover:text-[#ff003c] transition-colors ${currentView === 'bookings' ? 'text-[#ff003c]' : ''}`}>Réservations</button>
-              <button onClick={() => setView('profile')} className={`hover:text-[#ff003c] transition-colors ${currentView === 'profile' ? 'text-[#ff003c]' : ''}`}>Profil</button>
-            </>
+            <button onClick={() => setView('bookings')} className={`hover:text-[#ff003c] transition-colors ${currentView === 'bookings' ? 'text-[#ff003c]' : ''}`}>Réservations</button>
           )}
         </div>
 
         <div className="flex items-center gap-4">
           {user ? (
             <div className="flex items-center gap-4">
-              <span className="text-xs text-white/60">Bonjour, <span className="text-white font-bold">{user.prenom}</span></span>
+              <button
+                onClick={() => setView('profile')}
+                className="bg-white/5 hover:bg-white/10 border border-white/10 px-4 py-2 rounded-xl text-xs font-black uppercase italic transition-all flex items-center gap-2"
+              >
+                <User size={14} className="text-[#ff003c]" />
+                <span className="text-white">Profil: <span className="font-bold">{user.prenom}</span></span>
+              </button>
               <button onClick={onLogout} className="bg-white/5 hover:bg-white/10 border border-white/10 px-4 py-2 rounded-xl text-xs font-black uppercase italic transition-all">
                 Déconnexion
               </button>
