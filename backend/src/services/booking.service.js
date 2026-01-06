@@ -1095,76 +1095,107 @@ const getUserBookings = async (userId, filters = {}) => {
  */
 const getBookingDetails = async (bookingId, userId) => {
   try {
-    const booking = await prisma.booking.findUnique({
-      where: { id: bookingId },
-      include: {
-        user: {
-          select: {
-            id: true,
-            nom: true,
-            prenom: true,
-            email: true,
-            telephone: true
-          }
-        },
-        varianteCar: {
-          include: {
-            car: {
-              include: {
-                brand: true,
-                category: true,
-                images: true
-              }
-            }
-          }
-        },
-        status: true,
-        payments: {
-          orderBy: {
-            created_at: 'asc'
-          }
-        },
-        invoices: {
-          orderBy: {
-            created_at: 'desc'
-          }
-        },
-        loyaltyTransactions: {
-          orderBy: {
-            created_at: 'desc'
-          }
-        }
-      }
+    console.log('getBookingDetails:start', { bookingId, userId });
+    const base = await prisma.booking.findUnique({
+      where: { id: bookingId }
     });
-
-    if (!booking) {
+    if (!base) {
       throw new BookingNotFoundError(bookingId);
     }
-
-    // Verify user ownership (unless admin)
-    if (booking.user_id !== userId) {
+    if (base.user_id !== userId) {
       throw new Error('Accès non autorisé à cette réservation');
     }
-
-    // Calculate price breakdown
-    const priceBreakdown = await calculateBookingPrice({
-      carId: booking.varianteCar.car_id,
-      dateDebut: booking.date_debut,
-      dateFin: booking.date_fin,
-      userId: booking.user_id
-    });
-
-    return {
-      ...booking,
-      booking_reference: generateBookingReference(booking.id),
-      priceBreakdown,
-      can_modify: canModifyBooking(booking).canModify,
-      can_cancel: ['EN_ATTENTE', 'EN_COURS'].includes(booking.status.name),
-      cancellation_policy: calculateCancellationPenalty(booking.date_debut)
+    let user = null;
+    let varianteCar = null;
+    let status = null;
+    let protection = null;
+    let payments = [];
+    let invoices = [];
+    let loyaltyTransactions = [];
+    try {
+      user = await prisma.user.findUnique({
+        where: { id: base.user_id },
+        select: { id: true, nom: true, prenom: true, email: true, telephone: true }
+      });
+    } catch (e) {
+      console.warn('RELATION_LOAD_FAILED:user', e.message);
+    }
+    try {
+      varianteCar = await prisma.varianteCar.findUnique({
+        where: { id: base.variante_car_id },
+        include: {
+          car: { include: { brand: true, category: true, images: true } }
+        }
+      });
+    } catch (e) {
+      console.warn('RELATION_LOAD_FAILED:varianteCar', e.message);
+    }
+    try {
+      status = await prisma.bookingStatus.findUnique({ where: { id: base.status_id } });
+    } catch (e) {
+      console.warn('RELATION_LOAD_FAILED:status', e.message);
+    }
+    try {
+      if (base.protection_id) {
+        protection = await prisma.protection.findUnique({ where: { id: base.protection_id } });
+      }
+    } catch (e) {
+      console.warn('RELATION_LOAD_FAILED:protection', e.message);
+    }
+    try {
+      payments = await prisma.payment.findMany({
+        where: { booking_id: base.id },
+        orderBy: { created_at: 'asc' }
+      });
+    } catch (e) {
+      console.warn('RELATION_LOAD_FAILED:payments', e.message);
+    }
+    try {
+      invoices = await prisma.invoice.findMany({
+        where: { booking_id: base.id },
+        orderBy: { created_at: 'desc' }
+      });
+    } catch (e) {
+      console.warn('RELATION_LOAD_FAILED:invoices', e.message);
+    }
+    try {
+      loyaltyTransactions = await prisma.loyaltyTransaction.findMany({
+        where: { booking_id: base.id },
+        orderBy: { created_at: 'desc' }
+      });
+    } catch (e) {
+      console.warn('RELATION_LOAD_FAILED:loyaltyTransactions', e.message);
+    }
+    const statusName = status?.name || base.status_name;
+    const assembled = {
+      ...base,
+      user,
+      varianteCar,
+      status: status,
+      protection,
+      payments,
+      invoices,
+      loyaltyTransactions
     };
-
+    const priceBreakdown = await calculateBookingPrice({
+      carId: base.variante_car_id,
+      dateDebut: base.date_debut,
+      dateFin: base.date_fin,
+      userId: base.user_id
+    });
+    const canCancel = ['EN_ATTENTE', 'EN_COURS'].includes(statusName);
+    const result = {
+      ...assembled,
+      booking_reference: generateBookingReference(base.id),
+      priceBreakdown,
+      can_modify: canModifyBooking(assembled).canModify,
+      can_cancel: canCancel,
+      cancellation_policy: calculateCancellationPenalty(base.date_debut)
+    };
+    console.log('getBookingDetails:success', { bookingId, statusName, paymentsCount: payments.length, invoicesCount: invoices.length });
+    return result;
   } catch (error) {
-    console.error('Error getting booking details:', error);
+    console.error('getBookingDetails:error', error);
     throw error;
   }
 };
