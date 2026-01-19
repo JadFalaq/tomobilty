@@ -8,6 +8,10 @@ export default defineConfig({
     port: 3000,
     open: true
   },
+  publicDir: '../public',
+  resolve: {
+    dedupe: ['react', 'react-dom']
+  },
   optimizeDeps: {
     include: ['react', 'react-dom', 'framer-motion', 'lucide-react']
   }

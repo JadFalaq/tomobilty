@@ -52,52 +52,7 @@ const THEME = {
 const GLOW_RED = "shadow-[0_0_20px_rgba(255,0,60,0.4)]";
 const GLASS = "bg-black/60 backdrop-blur-xl border border-white/10";
 
-const CATEGORIES = [
-  { id: 1, name: 'Sport', description: 'Vitesse et Adrénaline', icon: Zap },
-  { id: 2, name: 'SUV', description: 'Puissance et Confort', icon: Navigation },
-  { id: 3, name: 'Luxe', description: 'Prestige Absolu', icon: Award },
-  { id: 4, name: 'Urbaine', description: 'Agilité en Ville', icon: MapPin },
-];
 
-const PROMOS = [
-  { id: 1, title: 'Weekend Turbo', discount: '-25%', car: 'Catégorie Sport' },
-  { id: 2, title: 'Offre Rabat-VIP', discount: '-15%', car: 'Berlines Luxe' },
-  { id: 3, title: 'Fidélité Gold', discount: '-30%', car: 'Toute la flotte' },
-];
-
-const TOP_CARS = [
-  { id: 1, name: 'Range Rover Stealth', price: '1200', image: 'https://images.unsplash.com/photo-1563720223185-11003d516935?q=80&w=800' },
-  { id: 2, name: 'Porsche Taycan S', price: '2500', image: 'https://images.unsplash.com/photo-1614200024970-072051666427?q=80&w=800' },
-  { id: 3, name: 'Audi RS6 Avant', price: '1800', image: 'https://images.unsplash.com/photo-1606148316315-08e063b40040?q=80&w=800' },
-];
-
-const MOCK_CARS = [
-  { 
-    id: 1, brandId: 1, categoryId: 1, modele: 'Taycan S', transmission: 'Automatique', nombre_places: 4, prix_par_jour: 2500, 
-    images: ['https://images.unsplash.com/photo-1614200024970-072051666427?q=80&w=800'],
-    brand: { name: 'Porsche' }, category: { name: 'Sport' },
-    variantes: [{ id: 101, type_carburant: 'Électrique', ville: 'Casablanca' }]
-  },
-  { 
-    id: 2, brandId: 2, categoryId: 2, modele: 'Evoque Stealth', transmission: 'Automatique', nombre_places: 5, prix_par_jour: 1200, 
-    images: ['https://images.unsplash.com/photo-1563720223185-11003d516935?q=80&w=800'],
-    brand: { name: 'Range Rover' }, category: { name: 'SUV' },
-    variantes: [{ id: 102, type_carburant: 'Diesel', ville: 'Rabat' }]
-  }
-];
-
-const MOCK_USER_BOOKINGS = [
-  {
-    id: 1024,
-    date_debut: "2024-12-28T10:00:00Z",
-    date_fin: "2024-12-30T10:00:00Z",
-    lieu_prise_en_charge: "Casablanca Aéroport",
-    prix_total: 5000.00,
-    status_name: "EN_ATTENTE",
-    varianteCar: { car: { brand: { name: "Porsche" }, modele: "Taycan S", images: [{ image_url: "https://images.unsplash.com/photo-1614200024970-072051666427?q=80&w=400" }] } },
-    invoices: []
-  }
-];
 
 const GoogleIcon = () => (
   <svg viewBox="0 0 24 24" width="18" height="18" xmlns="http://www.w3.org/2000/svg">
@@ -150,7 +105,7 @@ function SectionTitle({ subtitle, title }) {
     <div className="mb-12">
       <div className="flex items-center gap-2 mb-2">
         <div className="w-8 h-[2px] bg-[#ff003c]" />
-        <span className="text-[10px] font-black uppercase tracking-[0.3em] text-[#ff003c]">{subtitle}</span>
+        <span className="text-transparent stroke-text">{subtitle}</span>
       </div>
       <h2 className="text-4xl md:text-6xl font-black italic uppercase text-white leading-none tracking-tight">{title}</h2>
     </div>
@@ -272,8 +227,8 @@ function AuthPortal({ isOpen, onClose }) {
 
 function SearchSection({ isSticky }) {
   return (
-    <motion.div layout className={`${isSticky ? 'fixed top-24 left-1/2 -translate-x-1/2 w-[90%] z-[90]' : 'relative w-full'}`} initial={false}>
-      <div className={`${GLASS} p-2 rounded-3xl border-[#ff003c]/30 ${GLOW_RED} transition-all duration-500`}>
+    <motion.div className={`${isSticky ? 'fixed top-24 inset-x-0 z-[90] flex justify-center px-4 md:px-0' : 'relative w-full'}`}>
+      <div className={`${GLASS} p-2 rounded-3xl border-[#ff003c]/30 ${GLOW_RED} transition-all duration-500 w-full max-w-6xl`}>
         <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
           <div className="flex flex-col p-3 border-r border-white/10 group"><label className="text-[8px] font-black text-[#ff003c] uppercase mb-1 text-left">Lieu de Retrait</label><div className="flex items-center gap-2"><MapPin size={16} className="text-white/40" /><input type="text" placeholder="Casablanca..." className="bg-transparent border-none outline-none text-white text-xs font-bold w-full" /></div></div>
           <div className="flex flex-col p-3 border-r border-white/10"><label className="text-[8px] font-black text-[#ff003c] uppercase mb-1 text-left">Lieu de Retour</label><div className="flex items-center gap-2"><Navigation size={16} className="text-white/40" /><input type="text" placeholder="Même ville..." className="bg-transparent border-none outline-none text-white text-xs font-bold w-full" /></div></div>
@@ -287,6 +242,24 @@ function SearchSection({ isSticky }) {
 }
 
 function HomeView({ setView, setSelectedCat }) {
+  const [stickySearch, setStickySearch] = useState(false);
+  const searchSentinelRef = useRef(null);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        setStickySearch(!entry.isIntersecting);
+      },
+      { threshold: 0 }
+    );
+
+    if (searchSentinelRef.current) {
+      observer.observe(searchSentinelRef.current);
+    }
+
+    return () => observer.disconnect();
+  }, []);
+
   const handleHomeCatSelect = (id) => {
     setSelectedCat(id);
     setView('cars');
@@ -297,10 +270,24 @@ function HomeView({ setView, setSelectedCat }) {
       <section className="relative min-h-screen flex flex-col items-center justify-center px-6 pt-20 overflow-hidden">
         <div className="absolute top-1/4 left-1/4 w-[500px] h-[500px] bg-[#ff003c]/10 blur-[120px] rounded-full animate-pulse" />
         <div className="absolute bottom-1/4 right-1/4 w-[500px] h-[500px] bg-blue-600/5 blur-[120px] rounded-full animate-pulse" />
-        <div className="max-w-7xl w-full z-10 text-center">
-          <motion.h1 initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} className="text-[12vw] font-black italic uppercase leading-none tracking-tighter mb-4 text-transparent stroke-text opacity-20 font-choplin">TOMMOBILTY</motion.h1>
-          <motion.h2 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="text-5xl md:text-8xl font-black italic uppercase text-white mb-16 mt-[-6vw]">L'Élite du Car Rental <br /> <span className="text-[#ff003c]">Au Maroc.</span></motion.h2>
-          <SearchSection isSticky={false} />
+        <div className="max-w-7xl w-full z-10 flex flex-col items-center text-center">
+          <motion.h1
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="text-[9rem] font-black italic uppercase mb-1"
+          >
+            <span className="text-transparent stroke-text">TOMMOBILTY</span>
+          </motion.h1>
+          <motion.h2
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+            className="text-6xl font-black italic uppercase text-white mb-16"
+          >
+            L'Élite du Car Rental <br /> <span className="text-[#ff003c]">Au Maroc.</span>
+          </motion.h2>
+          <div ref={searchSentinelRef} className="h-0 w-full" />
+          <SearchSection isSticky={stickySearch} />
           <div className="mt-20 flex justify-center gap-10 md:gap-24 text-center">
             <div className="group cursor-default"><p className="text-4xl font-black text-white italic group-hover:text-[#ff003c] transition-colors duration-300">500+</p><p className="text-[8px] font-black text-white/40 uppercase tracking-widest">Véhicules</p></div>
             <div className="group cursor-default"><p className="text-4xl font-black text-white italic group-hover:text-[#ff003c] transition-colors duration-300">24/7</p><p className="text-[8px] font-black text-white/40 uppercase tracking-widest">Support VIP</p></div>

@@ -2,10 +2,11 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FaChevronLeft as ChevronLeft, FaChevronRight as ChevronRight } from 'react-icons/fa';
 
-const CustomCalendar = ({ value, onChange, onClose, minDate }) => {
+const CustomCalendar = ({ value, onChange, onClose, minDate, rangeStart, rangeEnd }) => {
   const [currentMonth, setCurrentMonth] = useState(
     value ? new Date(value) : new Date()
   );
+  const [hoveredDate, setHoveredDate] = useState(null);
 
   const monthNames = [
     'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
@@ -100,12 +101,32 @@ const CustomCalendar = ({ value, onChange, onClose, minDate }) => {
     );
   };
 
+  const isInRange = (date) => {
+    if (!date || !rangeStart) return false;
+
+    const start = new Date(rangeStart);
+    start.setHours(0, 0, 0, 0);
+
+    const endSource = hoveredDate || rangeEnd;
+    if (!endSource) return false;
+
+    const end = new Date(endSource);
+    end.setHours(0, 0, 0, 0);
+
+    if (end < start) return false;
+
+    const d = new Date(date);
+    d.setHours(0, 0, 0, 0);
+
+    return d >= start && d <= end;
+  };
+
   return (
     <motion.div
-      initial={{ opacity: 0, scale: 0.95, y: -10 }}
+      initial={{ opacity: 0, scale: 0.95, y: 10 }}
       animate={{ opacity: 1, scale: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.95, y: -10 }}
-      className="absolute top-full left-0 mt-2 bg-[#0a0a0a] border border-white/10 rounded-2xl p-6 shadow-2xl z-50 min-w-[320px]"
+      exit={{ opacity: 0, scale: 0.95, y: 10 }}
+      className="absolute top-full left-0 mt-2 bg-[#0a0a0a] border border-white/10 rounded-2xl p-6 shadow-2xl z-[999] min-w-[320px]"
     >
       <div className="flex items-center justify-between mb-6">
         <button
@@ -141,16 +162,25 @@ const CustomCalendar = ({ value, onChange, onClose, minDate }) => {
           const selected = isSelected(date);
           const disabled = isDisabled(date);
           const today = isToday(date);
+          const inRange = isInRange(date);
 
           return (
             <button
               key={index}
               onClick={() => handleDateClick(date)}
+              onMouseEnter={() => {
+                if (!date || disabled || !rangeStart) return;
+                setHoveredDate(date);
+              }}
+              onMouseLeave={() => {
+                setHoveredDate(null);
+              }}
               disabled={!date || disabled}
               className={`
                 aspect-square flex items-center justify-center rounded-lg text-sm font-bold transition-all
                 ${!date ? 'invisible' : ''}
                 ${disabled ? 'text-white/20 cursor-not-allowed' : 'text-white hover:bg-white/10'}
+                ${inRange && !selected ? 'bg-[#ff003c]/40 text-white' : ''}
                 ${selected ? 'bg-[#ff003c] text-white shadow-lg' : ''}
                 ${today && !selected ? 'border border-[#ff003c]' : ''}
               `}

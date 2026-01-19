@@ -18,6 +18,8 @@ const pickupSiteRoutes = require('../src/routes/pickupsite.routes');
 
 // Import middlewares
 const { errorHandler } = require('../src/middlewares/errorHandler.middleware');
+const { publicGetLimiter, writeLimiter } = require('../src/middlewares/rateLimit.middleware');
+const { sanitizeRequest } = require('../src/middlewares/validation.middleware');
 
 const app = express();
 
@@ -54,6 +56,34 @@ app.options('*', cors(corsOptions));
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(sanitizeRequest);
+
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Strict-Transport-Security', 'max-age=31536000');
+  res.setHeader('Content-Security-Policy', "default-src 'self'");
+  next();
+});
+
+app.use((req, res, next) => {
+  const skipPaths = [
+    '/api/payments/cmi/ipn',
+    '/api/payments/stripe/webhook'
+  ];
+
+  if (skipPaths.some((p) => req.path.startsWith(p))) {
+    return next();
+  }
+
+  if (req.method === 'GET') {
+    return publicGetLimiter(req, res, next);
+  }
+  if (req.method === 'POST' || req.method === 'PUT' || req.method === 'DELETE') {
+    return writeLimiter(req, res, next);
+  }
+  next();
+});
 
 // Health routes
 app.use('/api', require('../src/routes/health.routes'));

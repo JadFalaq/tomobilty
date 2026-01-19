@@ -252,6 +252,16 @@ model Booking {
   @@map("booking")
 }
 
+model PickupSite {
+  id         Int      @id @default(autoincrement())
+  nom        String   @unique @db.VarChar(255)
+  is_active  Boolean  @default(true)
+  created_at DateTime @default(now())
+  updated_at DateTime @default(now()) @updatedAt
+
+  @@map("pickup_site")
+}
+
 enum BookingStatusName {
   EN_ATTENTE
   EN_COURS
@@ -417,16 +427,6 @@ model PromotionCategory {
 
   @@unique([promotion_id, category_id])
   @@map("promotion_category")
-}
-
-model PickupSite {
-  id         Int      @id @default(autoincrement())
-  nom        String   @db.VarChar(255) @unique
-  is_active  Boolean  @default(true)
-  created_at DateTime @default(now())
-  updated_at DateTime @default(now()) @updatedAt
-
-  @@map("pickup_site")
 }
 
 model ChatConversation {

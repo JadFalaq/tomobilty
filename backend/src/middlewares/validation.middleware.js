@@ -1,6 +1,6 @@
 const { body, param, query, validationResult } = require('express-validator');
+const validator = require('validator');
 
-// Handle validation errors
 const handleValidationErrors = (req, res, next) => {
   const errors = validationResult(req);
   
@@ -19,6 +19,46 @@ const handleValidationErrors = (req, res, next) => {
     });
   }
   
+  next();
+};
+
+const sanitizeRequest = (req, res, next) => {
+  const skipPaths = [
+    '/api/payments/cmi/ipn',
+    '/api/payments/stripe/webhook'
+  ];
+
+  if (skipPaths.some((p) => req.path.startsWith(p))) {
+    return next();
+  }
+
+  const sanitizeValue = (value) => {
+    if (typeof value === 'string') {
+      return validator.escape(value);
+    }
+    if (Array.isArray(value)) {
+      return value.map(sanitizeValue);
+    }
+    if (value && typeof value === 'object') {
+      const result = {};
+      Object.keys(value).forEach((key) => {
+        result[key] = sanitizeValue(value[key]);
+      });
+      return result;
+    }
+    return value;
+  };
+
+  if (req.body) {
+    req.body = sanitizeValue(req.body);
+  }
+  if (req.query) {
+    req.query = sanitizeValue(req.query);
+  }
+  if (req.params) {
+    req.params = sanitizeValue(req.params);
+  }
+
   next();
 };
 
@@ -223,6 +263,7 @@ const validateCarFilters = [
 
 module.exports = {
   handleValidationErrors,
+  sanitizeRequest,
   validateUserRegistration,
   validateUserLogin,
   validateCarCreation,

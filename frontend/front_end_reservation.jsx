@@ -50,7 +50,7 @@ import {
  */
 
 // --- CONFIGURATION DE LA MARQUE ---
-const BRAND_LOGO = "image_34cca8.png"; 
+const BRAND_LOGO = "/uploads/WhatsApp_Image_2025-12-26_at_17.23.03-removebg-preview.png"; 
 
 // --- CONFIGURATION DU DESIGN ---
 const THEME = {

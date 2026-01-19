@@ -6,7 +6,7 @@ import {
   FaClock as Clock, FaArrowRight as ArrowRight, FaAward as Award, FaCheck as Check,
   FaTimes as X, FaEnvelope as Mail, FaHistory as History, FaDownload as Download,
   FaFileAlt as FileText, FaLock as Lock, FaFacebook as Facebook, FaInstagram as Instagram,
-  FaTwitter as Twitter, FaLinkedin as Linkedin, FaPhone as Phone, FaMapMarked as MapMarked,
+  FaWhatsapp as Whatsapp, FaPhone as Phone, FaMapMarked as MapMarked,
   FaIdCard as IdCard, FaInfo as Info, FaStar as Star, FaChevronRight as ChevronRight, FaChartLine as TrendingUp
 } from 'react-icons/fa';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -30,6 +30,28 @@ const THEME = {
 
 const GLOW_RED = "shadow-[0_0_20px_rgba(255,0,60,0.4)]";
 const GLASS = "bg-black/60 backdrop-blur-xl border border-white/10";
+const LOGO_SRC = "/uploads/WhatsApp_Image_2025-12-26_at_17.23.03-removebg-preview.png";
+
+const INITIAL_FILTERS = { transmission: 'Tous', minPrice: 0, maxPrice: 5000, seats: 'Tous', fuel: 'Tous' };
+const INITIAL_PENDING_FILTERS = { ...INITIAL_FILTERS };
+
+const TRANSMISSION_OPTIONS = [
+  { id: 'Tous', nom: 'Tous' },
+  { id: 'Automatique', nom: 'Automatique' },
+  { id: 'Manuelle', nom: 'Manuelle' },
+];
+
+const SEAT_OPTIONS = [
+  { id: 'Tous', nom: 'Tous' },
+  { id: '2', nom: '2 Places' },
+  { id: '4', nom: '4 Places' },
+  { id: '5', nom: '5 Places' },
+];
+
+const sanitizeText = (value) => {
+  if (typeof value !== 'string') return value;
+  return value;
+};
 
 const GoogleIcon = () => (
   <svg viewBox="0 0 24 24" width="18" height="18" xmlns="http://www.w3.org/2000/svg">
@@ -47,26 +69,35 @@ function Footer({ setView }) {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-12">
           <div className="space-y-6">
             <div className="flex items-center gap-2">
-              <div className="bg-[#ff003c] p-1.5 rounded-lg rotate-12 shadow-[0_0_10px_#ff003c]">
-                <Zap size={20} className="text-white" fill="white" />
-              </div>
-              <span className="text-2xl font-black italic tracking-tighter text-white">TOMMOBILTY</span>
+              <img
+                src={LOGO_SRC}
+                alt="Tommobility"
+                className="h-10 w-auto object-contain"
+              />
             </div>
             <p className="text-white/40 text-sm font-medium leading-relaxed">
               L'élite du car rental au Maroc. Vivez l'expérience automobile premium.
             </p>
             <div className="flex gap-4">
-              <a href="#" className="w-10 h-10 rounded-xl bg-white/5 hover:bg-[#ff003c] border border-white/10 hover:border-[#ff003c] flex items-center justify-center transition-all group">
+              <a
+                href="https://web.facebook.com/profile.php?id=61585338434243"
+                target="_blank"
+                rel="noreferrer"
+                className="w-10 h-10 rounded-xl bg-white/5 hover:bg-[#ff003c] border border-white/10 hover:border-[#ff003c] flex items-center justify-center transition-all group"
+              >
                 <Facebook size={18} className="text-white/60 group-hover:text-white" />
               </a>
-              <a href="#" className="w-10 h-10 rounded-xl bg-white/5 hover:bg-[#ff003c] border border-white/10 hover:border-[#ff003c] flex items-center justify-center transition-all group">
+              <a
+                href="#"
+                className="w-10 h-10 rounded-xl bg-white/5 hover:bg-[#ff003c] border border-white/10 hover:border-[#ff003c] flex items-center justify-center transition-all group"
+              >
                 <Instagram size={18} className="text-white/60 group-hover:text-white" />
               </a>
-              <a href="#" className="w-10 h-10 rounded-xl bg-white/5 hover:bg-[#ff003c] border border-white/10 hover:border-[#ff003c] flex items-center justify-center transition-all group">
-                <Twitter size={18} className="text-white/60 group-hover:text-white" />
-              </a>
-              <a href="#" className="w-10 h-10 rounded-xl bg-white/5 hover:bg-[#ff003c] border border-white/10 hover:border-[#ff003c] flex items-center justify-center transition-all group">
-                <Linkedin size={18} className="text-white/60 group-hover:text-white" />
+              <a
+                href="#"
+                className="w-10 h-10 rounded-xl bg-white/5 hover:bg-[#ff003c] border border-white/10 hover:border-[#ff003c] flex items-center justify-center transition-all group"
+              >
+                <Whatsapp size={18} className="text-white/60 group-hover:text-white" />
               </a>
             </div>
           </div>
@@ -174,10 +205,11 @@ function Navbar({ currentView, setView, onOpenAuth, user, onLogout }) {
     <nav className="fixed top-0 left-0 w-full z-[100] px-6 py-4">
       <div className={`max-w-7xl mx-auto ${GLASS} rounded-2xl px-8 py-4 flex justify-between items-center border-[#ff003c]/20 shadow-2xl`}>
         <div className="flex items-center gap-2 cursor-pointer" onClick={() => setView('home')}>
-          <div className="bg-[#ff003c] p-1.5 rounded-lg rotate-12 shadow-[0_0_10px_#ff003c]">
-            <Zap size={20} className="text-white" fill="white" />
-          </div>
-          <span className="text-2xl font-black italic tracking-tighter text-white">TOMMOBILTY</span>
+          <img
+            src={LOGO_SRC}
+            alt="Tommobility"
+            className="h-10 w-auto object-contain"
+          />
         </div>
         
         <div className="hidden md:flex gap-8 text-[10px] font-black uppercase tracking-[0.2em] text-white/70">
@@ -196,7 +228,7 @@ function Navbar({ currentView, setView, onOpenAuth, user, onLogout }) {
                 className="bg-white/5 hover:bg-white/10 border border-white/10 px-4 py-2 rounded-xl text-xs font-black uppercase italic transition-all flex items-center gap-2"
               >
                 <User size={14} className="text-[#ff003c]" />
-                <span className="text-white">Profil: <span className="font-bold">{user.prenom}</span></span>
+                <span className="text-white">Profil: <span className="font-bold">{sanitizeText(user.prenom)}</span></span>
               </button>
               <button onClick={onLogout} className="bg-white/5 hover:bg-white/10 border border-white/10 px-4 py-2 rounded-xl text-xs font-black uppercase italic transition-all">
                 Déconnexion
@@ -237,7 +269,7 @@ function InfoItem({ icon, label, value }) {
       </div>
       <div>
         <p className="text-[9px] font-black uppercase text-white/20 tracking-widest mb-1 italic">{label}</p>
-        <p className="text-sm font-bold text-white tracking-tight truncate max-w-[240px]">{value || 'Non renseigné'}</p>
+        <p className="text-sm font-bold text-white tracking-tight truncate max-w-[240px]">{value ? sanitizeText(value) : 'Non renseigné'}</p>
       </div>
     </div>
   );
@@ -407,7 +439,7 @@ function UserProfile() {
                   />
                 </div>
                 <p className="text-[8px] font-bold text-white/20 uppercase text-center tracking-[0.2em]">
-                  {(tier?.max_points && account?.lifetime_points) ? (tier.max_points - account.lifetime_points) : 0} points restants pour upgrader votre flotte
+                  {(tier?.max_points && account?.lifetime_points) ? (tier.max_points - account.lifetime_points) : 0} points restants +66pour upgrader votre flotte
                 </p>
               </div>
             </div>
@@ -463,7 +495,7 @@ function LeastDemandedCars({ onSelect }) {
   return (
     <section className="py-20 bg-black">
       <div className="max-w-7xl mx-auto px-6">
-        <SectionTitle subtitle="Rotation Flotte" title="Les Plus Demandées" />
+        <SectionTitle subtitle="nos propositions" title="Les Plus Demandées" />
         {loading ? (
           <div className="text-center py-10 text-white/40 font-bold">Chargement...</div>
         ) : (
@@ -504,7 +536,7 @@ function LeastDemandedCars({ onSelect }) {
   );
 }
 
-function CategorySelector({ categories, selectedCat, onSelect }) {
+function CategorySelector({ categories, selectedCat, onSelect, showHelper }) {
   const iconMap = {
     'Sport': Zap,
     'SUV': Navigation,
@@ -515,10 +547,20 @@ function CategorySelector({ categories, selectedCat, onSelect }) {
   return (
     <section className="mb-20">
       <div className="flex flex-col items-center text-center mb-16">
-        <span className="text-[#ff003c] font-black uppercase tracking-[0.4em] text-[10px] mb-4 italic">Architecture de Flotte</span>
         <h1 className="text-5xl md:text-8xl font-black italic uppercase text-white leading-none tracking-tighter">
           DISCIPLINE <br /> <span className="text-transparent stroke-text">ESTHÉTIQUE</span>
         </h1>
+        <p className="mt-4 text-[#ff003c] font-black uppercase tracking-[0.4em] text-[10px]">
+          Nos catégories
+        </p>
+        {showHelper && (
+          <div className="mt-2 flex items-center gap-2 self-start">
+            <div className="w-12 h-[2px] bg-[#ff003c]" />
+            <p className="text-[#ff003c] font-black uppercase tracking-[0.2em] text-[9px]">
+              Choisissez une catégorie pour afficher les véhicules
+            </p>
+          </div>
+        )}
       </div>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
         {categories.map((cat) => {
@@ -728,6 +770,86 @@ function AuthPortal({ isOpen, onClose }) {
   );
 }
 
+function LocationDropdown({ label, icon: Icon, value, onChange, sites, disabled }) {
+  const [open, setOpen] = useState(false);
+  const dropdownRef = useRef(null);
+  const selectedSite = sites.find((site) => String(site.id) === String(value));
+  const displayLabel = selectedSite ? selectedSite.nom : disabled ? 'Chargement...' : 'Sélectionner...';
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  return (
+    <div ref={dropdownRef} className="flex flex-col p-3 border-r border-white/10 relative">
+      <label className="text-[8px] font-black text-[#ff003c] uppercase mb-1 text-left">{label}</label>
+      <button
+        type="button"
+        onClick={() => {
+          if (disabled) return;
+          setOpen(!open);
+        }}
+        className={`flex items-center gap-2 bg-white/5 border border-white/10 rounded-2xl px-3 py-2 w-full text-left transition-colors ${
+          disabled ? 'opacity-40 cursor-not-allowed' : 'hover:border-[#ff003c] cursor-pointer'
+        }`}
+      >
+        <Icon size={16} className="text-[#ff003c]" />
+        <span className="text-white text-xs font-bold flex-1 truncate">
+          {displayLabel}
+        </span>
+        <ChevronRight
+          size={12}
+          className={`text-white/40 transition-transform ${open ? 'rotate-90' : ''}`}
+        />
+      </button>
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 6 }}
+            className="absolute top-full left-3 right-3 mt-2 bg-black border border-white/10 rounded-2xl shadow-2xl z-[999] max-h-60 overflow-y-auto"
+          >
+            {sites.length === 0 ? (
+              <div className="px-4 py-3 text-[11px] font-bold text-white/40 text-left">
+                Aucun lieu disponible
+              </div>
+            ) : (
+              sites.map((site) => (
+                <button
+                  key={site.id}
+                  type="button"
+                  onClick={() => {
+                    onChange(site.id);
+                    setOpen(false);
+                  }}
+                  className={`w-full px-4 py-3 text-left text-xs font-bold flex items-center justify-between transition-colors ${
+                    String(site.id) === String(value)
+                      ? 'bg-[#ff003c]/20 text-[#ff003c]'
+                      : 'text-white hover:bg-white/5'
+                  }`}
+                >
+                  <span className="truncate">{site.nom}</span>
+                </button>
+              ))
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 function SearchSection({ isSticky, onSearch }) {
   const [searchParams, setSearchParams] = useState({
     pickupSiteId: '',
@@ -739,9 +861,35 @@ function SearchSection({ isSticky, onSearch }) {
   const [loading, setLoading] = useState(true);
   const [showStartCalendar, setShowStartCalendar] = useState(false);
   const [showEndCalendar, setShowEndCalendar] = useState(false);
+  const startCalendarRef = useRef(null);
+  const endCalendarRef = useRef(null);
+
+  const scrollCalendarIntoView = (ref) => {
+    if (!ref.current || isSticky) return;
+    const rect = ref.current.getBoundingClientRect();
+    const offset = rect.top + window.pageYOffset - 200;
+    window.scrollTo({ top: offset, behavior: 'smooth' });
+  };
 
   useEffect(() => {
     fetchPickupSites();
+  }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (startCalendarRef.current && !startCalendarRef.current.contains(event.target)) {
+        setShowStartCalendar(false);
+      }
+      if (endCalendarRef.current && !endCalendarRef.current.contains(event.target)) {
+        setShowEndCalendar(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
   }, []);
 
   const fetchPickupSites = async () => {
@@ -762,47 +910,35 @@ function SearchSection({ isSticky, onSearch }) {
   };
 
   return (
-    <motion.div layout className={`${isSticky ? 'fixed top-24 left-1/2 -translate-x-1/2 w-[90%] z-[90]' : 'relative w-full'}`} initial={false}>
-      <div className={`${GLASS} p-2 rounded-3xl border-[#ff003c]/30 ${GLOW_RED} transition-all duration-500`}>
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
-          <div className="flex flex-col p-3 border-r border-white/10 group">
-            <label className="text-[8px] font-black text-[#ff003c] uppercase mb-1 text-left">Lieu de Retrait</label>
-            <div className="flex items-center gap-2">
-              <MapPin size={16} className="text-[#ff003c]" />
-              <select
-                value={searchParams.pickupSiteId}
-                onChange={(e) => setSearchParams({...searchParams, pickupSiteId: e.target.value})}
-                className="bg-transparent border-none outline-none text-white text-xs font-bold w-full cursor-pointer"
-              >
-                <option value="" className="bg-black">Sélectionner...</option>
-                {pickupSites.map((site) => (
-                  <option key={site.id} value={site.id} className="bg-black">{site.nom}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-          <div className="flex flex-col p-3 border-r border-white/10">
-            <label className="text-[8px] font-black text-[#ff003c] uppercase mb-1 text-left">Lieu de Retour</label>
-            <div className="flex items-center gap-2">
-              <Navigation size={16} className="text-[#ff003c]" />
-              <select
-                value={searchParams.returnSiteId}
-                onChange={(e) => setSearchParams({...searchParams, returnSiteId: e.target.value})}
-                className="bg-transparent border-none outline-none text-white text-xs font-bold w-full cursor-pointer"
-              >
-                <option value="" className="bg-black">Sélectionner...</option>
-                {pickupSites.map((site) => (
-                  <option key={site.id} value={site.id} className="bg-black">{site.nom}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-          <div className="flex flex-col p-3 border-r border-white/10 relative">
+    <div className="relative w-full h-[86px] md:h-[86px]">
+      <motion.div className={`${isSticky ? 'fixed top-24 inset-x-0 z-[90] flex justify-center px-4 md:px-0' : 'relative w-full flex justify-center'}`}>
+        <div className={`${GLASS} p-2 rounded-3xl border-[#ff003c]/30 ${GLOW_RED} transition-all duration-500 w-full max-w-6xl`}>
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
+          <LocationDropdown
+            label="Lieu de Retrait"
+            icon={MapPin}
+            value={searchParams.pickupSiteId}
+            onChange={(val) => setSearchParams({ ...searchParams, pickupSiteId: val })}
+            sites={pickupSites}
+            disabled={loading}
+          />
+          <LocationDropdown
+            label="Lieu de Retour"
+            icon={Navigation}
+            value={searchParams.returnSiteId}
+            onChange={(val) => setSearchParams({ ...searchParams, returnSiteId: val })}
+            sites={pickupSites}
+            disabled={loading}
+          />
+          <div ref={startCalendarRef} className="flex flex-col p-3 border-r border-white/10 relative">
             <label className="text-[8px] font-black text-[#ff003c] uppercase mb-1 text-left">Départ</label>
-            <div className="flex items-center gap-2 relative">
+            <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-2xl px-3 py-2 relative hover:border-[#ff003c] transition-colors">
               <button
                 type="button"
-                onClick={() => setShowStartCalendar(!showStartCalendar)}
+                onClick={() => {
+                  scrollCalendarIntoView(startCalendarRef);
+                  setShowStartCalendar(!showStartCalendar);
+                }}
                 className="flex-shrink-0 hover:scale-110 transition-transform"
               >
                 <Calendar size={16} className="text-[#ff003c]" />
@@ -811,10 +947,14 @@ function SearchSection({ isSticky, onSearch }) {
                 type="text"
                 readOnly
                 value={searchParams.startDate ? new Date(searchParams.startDate).toLocaleDateString('fr-FR') : ''}
-                onClick={() => setShowStartCalendar(!showStartCalendar)}
+                onClick={() => {
+                  scrollCalendarIntoView(startCalendarRef);
+                  setShowStartCalendar(!showStartCalendar);
+                }}
                 placeholder="Sélectionner..."
                 className="bg-transparent border-none outline-none text-white text-xs font-bold w-full cursor-pointer"
               />
+              
             </div>
             <AnimatePresence>
               {showStartCalendar && (
@@ -834,13 +974,21 @@ function SearchSection({ isSticky, onSearch }) {
               )}
             </AnimatePresence>
           </div>
-          <div className="flex flex-col p-3 border-r border-white/10 relative">
+          <div ref={endCalendarRef} className="flex flex-col p-3 border-r border-white/10 relative">
             <label className="text-[8px] font-black text-[#ff003c] uppercase mb-1 text-left">Retour</label>
-            <div className="flex items-center gap-2 relative">
+            <div
+              className={`flex items-center gap-2 bg-white/5 border border-white/10 rounded-2xl px-3 py-2 relative transition-colors ${
+                !searchParams.startDate ? 'opacity-30 cursor-not-allowed' : 'hover:border-[#ff003c]'
+              }`}
+            >
               <button
                 type="button"
-                onClick={() => setShowEndCalendar(!showEndCalendar)}
-                className="flex-shrink-0 hover:scale-110 transition-transform"
+                onClick={() => {
+                  if (!searchParams.startDate) return;
+                  scrollCalendarIntoView(endCalendarRef);
+                  setShowEndCalendar(!showEndCalendar);
+                }}
+                className={`flex-shrink-0 transition-transform ${!searchParams.startDate ? '' : 'hover:scale-110'}`}
               >
                 <Clock size={16} className="text-[#ff003c]" />
               </button>
@@ -848,9 +996,15 @@ function SearchSection({ isSticky, onSearch }) {
                 type="text"
                 readOnly
                 value={searchParams.endDate ? new Date(searchParams.endDate).toLocaleDateString('fr-FR') : ''}
-                onClick={() => setShowEndCalendar(!showEndCalendar)}
-                placeholder="Sélectionner..."
-                className="bg-transparent border-none outline-none text-white text-xs font-bold w-full cursor-pointer"
+                onClick={() => {
+                  if (!searchParams.startDate) return;
+                  scrollCalendarIntoView(endCalendarRef);
+                  setShowEndCalendar(!showEndCalendar);
+                }}
+                placeholder={searchParams.startDate ? 'Sélectionner...' : 'Choisir la date de départ d\'abord'}
+                className={`bg-transparent border-none outline-none text-xs font-bold w-full ${
+                  !searchParams.startDate ? 'cursor-not-allowed text-white/30' : 'cursor-pointer text-white'
+                }`}
               />
             </div>
             <AnimatePresence>
@@ -865,13 +1019,15 @@ function SearchSection({ isSticky, onSearch }) {
                   minDate={(() => {
                     if (searchParams.startDate) {
                       const startDate = new Date(searchParams.startDate);
-                      startDate.setDate(startDate.getDate() + 3);
+                      startDate.setDate(startDate.getDate() + 2);
                       return startDate.toISOString().split('T')[0];
                     }
                     const tomorrow = new Date();
-                    tomorrow.setDate(tomorrow.getDate() + 4);
+                    tomorrow.setDate(tomorrow.getDate() + 3);
                     return tomorrow.toISOString().split('T')[0];
                   })()}
+                  rangeStart={searchParams.startDate}
+                  rangeEnd={searchParams.endDate || searchParams.startDate}
                 />
               )}
             </AnimatePresence>
@@ -882,13 +1038,32 @@ function SearchSection({ isSticky, onSearch }) {
           >
             <Search size={20} />
           </button>
+          </div>
         </div>
-      </div>
-    </motion.div>
+      </motion.div>
+    </div>
   );
 }
 
 function HomeView({ setView, setSelectedCat, categories, onSearch }) {
+  const [stickySearch, setStickySearch] = useState(false);
+  const searchSentinelRef = useRef(null);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        setStickySearch(!entry.isIntersecting);
+      },
+      { threshold: 0 }
+    );
+
+    if (searchSentinelRef.current) {
+      observer.observe(searchSentinelRef.current);
+    }
+
+    return () => observer.disconnect();
+  }, []);
+
   const handleHomeCatSelect = (id) => {
     setSelectedCat(id);
     setView('cars');
@@ -900,13 +1075,27 @@ function HomeView({ setView, setSelectedCat, categories, onSearch }) {
 
   return (
     <>
-      <section className="relative min-h-screen flex flex-col items-center justify-center px-6 pt-20 overflow-hidden">
+      <section className="relative min-h-screen flex flex-col items-center justify-center px-6 pt-20">
         <div className="absolute top-1/4 left-1/4 w-[500px] h-[500px] bg-[#ff003c]/10 blur-[120px] rounded-full animate-pulse" />
         <div className="absolute bottom-1/4 right-1/4 w-[500px] h-[500px] bg-blue-600/5 blur-[120px] rounded-full animate-pulse" />
-        <div className="max-w-7xl w-full z-10 text-center">
-          <motion.h1 initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} className="text-[12vw] font-black italic uppercase leading-none tracking-tighter mb-4 text-transparent stroke-text opacity-20">TOMMOBILTY</motion.h1>
-          <motion.h2 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="text-5xl md:text-8xl font-black italic uppercase text-white mb-16 mt-[-6vw]">L'Élite du Car Rental <br /> <span className="text-[#ff003c]">Au Maroc.</span></motion.h2>
-          <SearchSection isSticky={false} onSearch={handleSearch} />
+        <div className="max-w-7xl w-full z-10 flex flex-col items-center text-center">
+          <motion.h1
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="text-[9rem] font-black italic uppercase mb-1"
+          >
+            <span className="text-transparent stroke-text">TOMMOBILTY</span>
+          </motion.h1>
+          <motion.h2
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+            className="text-6xl font-black italic uppercase text-white mb-16"
+          >
+            L'Élite du Car Rental <br /> <span className="text-[#ff003c]">Au Maroc.</span>
+          </motion.h2>
+          <div ref={searchSentinelRef} className="h-0 w-full" />
+          <SearchSection isSticky={stickySearch} onSearch={handleSearch} />
           <div className="mt-20 flex justify-center gap-10 md:gap-24 text-center">
             <div className="group cursor-default"><p className="text-4xl font-black text-white italic group-hover:text-[#ff003c] transition-colors duration-300">500+</p><p className="text-[8px] font-black text-white/40 uppercase tracking-widest">Véhicules</p></div>
             <div className="group cursor-default"><p className="text-4xl font-black text-white italic group-hover:text-[#ff003c] transition-colors duration-300">24/7</p><p className="text-[8px] font-black text-white/40 uppercase tracking-widest">Support VIP</p></div>
@@ -932,7 +1121,8 @@ function HomeView({ setView, setSelectedCat, categories, onSearch }) {
 function CarsPage({ selectedCat, setSelectedCat, setView, categories }) {
   const [cars, setCars] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [filters, setFilters] = useState({ transmission: 'Tous', minPrice: 0, maxPrice: 5000, seats: 'Tous', fuel: 'Tous' });
+  const [filters, setFilters] = useState(INITIAL_FILTERS);
+  const [pendingFilters, setPendingFilters] = useState(INITIAL_PENDING_FILTERS);
   const [bookingCar, setBookingCar] = useState(null);
   const [bookingDates, setBookingDates] = useState({ startDate: '', endDate: '' });
   const [checkResult, setCheckResult] = useState(null);
@@ -955,13 +1145,54 @@ function CarsPage({ selectedCat, setSelectedCat, setView, categories }) {
   };
 
   const filteredCars = useMemo(() => {
+    const minPrice = typeof filters.minPrice === 'number' ? filters.minPrice : 0;
+    const maxPrice = typeof filters.maxPrice === 'number' ? filters.maxPrice : Number.MAX_SAFE_INTEGER;
+
     return cars.filter(car => {
       const matchTrans = filters.transmission === 'Tous' ? true : car.transmission === filters.transmission;
-      const matchPrice = car.prix_par_jour >= filters.minPrice && car.prix_par_jour <= filters.maxPrice;
+      const matchPrice = car.prix_par_jour >= minPrice && car.prix_par_jour <= maxPrice;
       const matchSeats = filters.seats === 'Tous' ? true : car.nombre_places === parseInt(filters.seats);
       return matchTrans && matchPrice && matchSeats;
     });
   }, [cars, filters]);
+
+  const handlePriceChange = (field, value) => {
+    if (value === '') {
+      setPendingFilters(prev => ({ ...prev, [field]: '' }));
+      return;
+    }
+    const numeric = parseInt(value, 10);
+    if (Number.isNaN(numeric)) return;
+    setPendingFilters(prev => ({ ...prev, [field]: numeric }));
+  };
+
+  const handleSelectChange = (field, value) => {
+    setPendingFilters(prev => ({ ...prev, [field]: value }));
+  };
+
+  const adjustPrice = (field, delta) => {
+    setPendingFilters(prev => {
+      const currentRaw = prev[field] === '' ? 0 : prev[field];
+      const current = typeof currentRaw === 'number' ? currentRaw : parseInt(currentRaw, 10) || 0;
+      const next = Math.max(0, current + delta);
+      return { ...prev, [field]: next };
+    });
+  };
+
+  const applyFilters = () => {
+    setFilters(prev => ({
+      ...prev,
+      transmission: pendingFilters.transmission,
+      seats: pendingFilters.seats,
+      minPrice: pendingFilters.minPrice === '' ? 0 : pendingFilters.minPrice,
+      maxPrice: pendingFilters.maxPrice === '' ? '' : pendingFilters.maxPrice
+    }));
+  };
+
+  const resetFilters = () => {
+    setFilters(INITIAL_FILTERS);
+    setPendingFilters(INITIAL_PENDING_FILTERS);
+  };
 
   const handleCheckAvailability = async () => {
     if (!bookingDates.startDate || !bookingDates.endDate) {
@@ -989,7 +1220,7 @@ function CarsPage({ selectedCat, setSelectedCat, setView, categories }) {
 
   return (
     <div className="pt-32 pb-40 px-6 max-w-7xl mx-auto">
-      <CategorySelector categories={categories} selectedCat={selectedCat} onSelect={(id) => {
+      <CategorySelector categories={categories} selectedCat={selectedCat} showHelper onSelect={(id) => {
         setSelectedCat(id);
         setTimeout(() => carSectionRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
       }} />
@@ -999,28 +1230,87 @@ function CarsPage({ selectedCat, setSelectedCat, setView, categories }) {
           <motion.section key="results" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} ref={carSectionRef} className="scroll-mt-32">
             <div className="mb-12 border-b border-white/10 pb-10">
               <SectionTitle subtitle={categories.find(c => c.id === selectedCat)?.name} title="RÉSULTATS DE RECHERCHE" />
-              <div className={`${GLASS} mt-8 p-6 rounded-[2rem] grid grid-cols-2 md:grid-cols-5 gap-6 items-center border-white/5`}>
-                <div className="space-y-2">
+              <div className={`${GLASS} mt-8 p-6 rounded-[2rem] grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-8 items-center border-white/5`}>
+                <div className="space-y-2 md:col-span-2">
                   <label className="text-[9px] font-black text-[#ff003c] uppercase tracking-widest block">Prix Min/Max</label>
                   <div className="flex items-center gap-2">
-                    <input type="number" placeholder="Min" value={filters.minPrice} onChange={(e) => setFilters({...filters, minPrice: parseInt(e.target.value) || 0})} className="bg-white/5 border border-white/10 p-2 rounded-lg text-xs font-bold w-full outline-none focus:border-[#ff003c]" />
-                    <input type="number" placeholder="Max" value={filters.maxPrice} onChange={(e) => setFilters({...filters, maxPrice: parseInt(e.target.value) || 5000})} className="bg-white/5 border border-white/10 p-2 rounded-lg text-xs font-bold w-full outline-none focus:border-[#ff003c]" />
+                    <div className="flex items-center gap-1 bg-black/60 border border-white/10 rounded-2xl px-2 w-full">
+                      <button
+                        type="button"
+                        onClick={() => adjustPrice('minPrice', -100)}
+                        className="w-6 h-6 flex items-center justify-center rounded-xl bg-black text-[#ff003c] text-xs font-black hover:bg-[#ff003c] hover:text-black transition-colors"
+                      >
+                        -
+                      </button>
+                      <input
+                        type="number"
+                        placeholder="Min"
+                        value={pendingFilters.minPrice}
+                        onChange={(e) => handlePriceChange('minPrice', e.target.value)}
+                        className="flex-1 bg-transparent border-none p-2 text-xs font-bold outline-none text-white placeholder:text-white/30"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => adjustPrice('minPrice', 100)}
+                        className="w-6 h-6 flex items-center justify-center rounded-xl bg-black text-[#ff003c] text-xs font-black hover:bg-[#ff003c] hover:text-black transition-colors"
+                      >
+                        +
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-1 bg-black/60 border border-white/10 rounded-2xl px-2 w-full">
+                      <button
+                        type="button"
+                        onClick={() => adjustPrice('maxPrice', -100)}
+                        className="w-6 h-6 flex items-center justify-center rounded-xl bg-black text-[#ff003c] text-xs font-black hover:bg-[#ff003c] hover:text-black transition-colors"
+                      >
+                        -
+                      </button>
+                      <input
+                        type="number"
+                        placeholder="Max"
+                        value={pendingFilters.maxPrice}
+                        onChange={(e) => handlePriceChange('maxPrice', e.target.value)}
+                        className="flex-1 bg-transparent border-none p-2 text-xs font-bold outline-none text-white placeholder:text-white/30"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => adjustPrice('maxPrice', 100)}
+                        className="w-6 h-6 flex items-center justify-center rounded-xl bg-black text-[#ff003c] text-xs font-black hover:bg-[#ff003c] hover:text-black transition-colors"
+                      >
+                        +
+                      </button>
+                    </div>
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <label className="text-[9px] font-black text-[#ff003c] uppercase tracking-widest block">Transmission</label>
-                  <select value={filters.transmission} onChange={(e) => setFilters({...filters, transmission: e.target.value})} className="bg-white/5 border border-white/10 p-2 rounded-lg text-xs font-bold w-full outline-none cursor-pointer">
-                    <option value="Tous">Tous</option><option value="Automatique">Automatique</option><option value="Manuelle">Manuelle</option>
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[9px] font-black text-[#ff003c] uppercase tracking-widest block">Places</label>
-                  <select value={filters.seats} onChange={(e) => setFilters({...filters, seats: e.target.value})} className="bg-white/5 border border-white/10 p-2 rounded-lg text-xs font-bold w-full outline-none cursor-pointer">
-                    <option value="Tous">Tous</option><option value="2">2 Places</option><option value="4">4 Places</option><option value="5">5 Places</option>
-                  </select>
-                </div>
-                <div className="flex items-end h-full">
-                  <button onClick={() => setFilters({ minPrice: 0, maxPrice: 5000, transmission: 'Tous', seats: 'Tous', fuel: 'Tous' })} className="text-[9px] font-black text-white/40 hover:text-[#ff003c] uppercase tracking-[0.2em]">Reset</button>
+                <LocationDropdown
+                  label="Transmission"
+                  icon={Car}
+                  value={pendingFilters.transmission}
+                  onChange={(val) => handleSelectChange('transmission', val)}
+                  sites={TRANSMISSION_OPTIONS}
+                  disabled={false}
+                />
+                <LocationDropdown
+                  label="Places"
+                  icon={User}
+                  value={pendingFilters.seats}
+                  onChange={(val) => handleSelectChange('seats', val)}
+                  sites={SEAT_OPTIONS}
+                  disabled={false}
+                />
+                <div className="flex items-end h-full justify-end gap-4">
+                  <button
+                    onClick={resetFilters}
+                    className="text-[9px] font-black text-white/40 hover:text-[#ff003c] uppercase tracking-[0.2em]"
+                  >
+                    Reset
+                  </button>
+                  <button
+                    onClick={applyFilters}
+                    className="px-4 py-2 bg-[#ff003c] text-white text-[9px] font-black uppercase tracking-[0.2em] rounded-2xl hover:bg-white hover:text-black transition-all"
+                  >
+                    Appliquer
+                  </button>
                 </div>
               </div>
             </div>
