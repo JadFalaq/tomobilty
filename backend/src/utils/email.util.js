@@ -14,32 +14,118 @@ const createTransporter = () => {
 };
 
 // Send email verification
-const sendEmailVerification = async (email, token) => {
+const sendEmailVerification = async (email, code) => {
   const transporter = createTransporter();
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
   
-  const verificationUrl = `${process.env.FRONTEND_URL}/verify-email?token=${token}`;
+  // Path to the logo file
+  const path = require('path');
+  const fs = require('fs');
+  // Use __dirname to resolve path relative to this file
+  // backend/src/utils -> backend/src -> backend -> root -> public
+  const logoPath = path.join(__dirname, '../../../public/uploads/logo_banner.png');
   
+  console.log('--- Email Debug ---');
+  console.log('Sending email to:', email);
+  console.log('Logo Path:', logoPath);
+  console.log('Logo Exists:', fs.existsSync(logoPath));
+  console.log('SMTP User:', process.env.EMAIL_USER);
+  
+  // Clean email input to avoid whitespace issues
+  const cleanEmail = email.trim();
+
   const mailOptions = {
     from: `"Tommobilty" <${process.env.EMAIL_USER}>`,
-    to: email,
-    subject: 'Vérification de votre adresse email - Tommobilty',
+    to: cleanEmail,
+    subject: '🔐 Vérifiez votre compte Tommobilty',
+    attachments: [{
+      filename: 'logo.png',
+      path: logoPath,
+      cid: 'logo' // same cid value as in the html img src
+    }],
     html: `
-      <div style="max-width: 600px; margin: 0 auto; font-family: Arial, sans-serif;">
-        <h2 style="color: #2563eb;">Bienvenue sur Tommobilty !</h2>
-        <p>Merci de vous être inscrit sur notre plateforme de location de voitures.</p>
-        <p>Pour activer votre compte, veuillez cliquer sur le lien ci-dessous :</p>
-        <a href="${verificationUrl}" 
-           style="display: inline-block; padding: 12px 24px; background-color: #2563eb; color: white; text-decoration: none; border-radius: 6px; margin: 16px 0;">
-          Vérifier mon email
-        </a>
-        <p>Ce lien expire dans 24 heures.</p>
-        <p>Si vous n'avez pas créé de compte, ignorez cet email.</p>
-        <hr style="margin: 24px 0; border: none; border-top: 1px solid #e5e7eb;">
-        <p style="color: #6b7280; font-size: 14px;">
-          Tommobilty - Location de voitures au Maroc<br>
-          Cet email a été envoyé automatiquement, merci de ne pas y répondre.
-        </p>
-      </div>
+      <!DOCTYPE html>
+      <html lang="fr">
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Vérification de compte Tommobilty</title>
+        <style>
+          /* Reset styles */
+          body { margin: 0; padding: 0; width: 100% !important; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; background-color: #000000; }
+          img { border: 0; outline: none; text-decoration: none; -ms-interpolation-mode: bicubic; }
+          /* Dark mode support */
+          @media (prefers-color-scheme: dark) {
+            body, table, td { background-color: #000000 !important; color: #ffffff !important; }
+          }
+        </style>
+      </head>
+      <body style="margin: 0; padding: 0; background-color: #000000 !important; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #ffffff;">
+        <!-- Wrapper Table (Forces Background) -->
+        <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #000000; margin: 0; padding: 0;" bgcolor="#000000">
+          <tr>
+            <td align="center" style="padding: 40px 0; background-color: #000000;" bgcolor="#000000">
+              
+              <!-- Container -->
+              <table width="600" border="0" cellspacing="0" cellpadding="0" bgcolor="#000000" style="background-color: #000000; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 30px rgba(0,0,0,0.5); border: 1px solid #333333; max-width: 600px;">
+                
+                <!-- Header with Logo -->
+                <tr>
+                  <td align="center" style="padding: 40px 0; background-color: #000000; border-bottom: 1px solid #222222;" bgcolor="#000000">
+                    <img src="cid:logo" alt="Tommobilty" width="300" style="display: block; border: 0; max-width: 100%; height: auto;" />
+                  </td>
+                </tr>
+                
+                <!-- Content -->
+                <tr>
+                  <td style="padding: 40px; background-color: #111111;" bgcolor="#111111">
+                    <h1 style="color: #ffffff; margin: 0 0 20px 0; font-size: 24px; text-align: center; font-weight: bold; text-transform: uppercase; letter-spacing: 1px;">Bienvenue chez <span style="color: #ff003c;">Tommobilty</span></h1>
+                    
+                    <p style="color: #aaaaaa; font-size: 16px; line-height: 24px; text-align: center; margin: 0 0 30px 0;">
+                      Merci de rejoindre l'élite de la location de voitures au Maroc. Pour finaliser votre inscription et accéder à votre espace, veuillez utiliser le code de vérification ci-dessous.
+                    </p>
+
+                    <!-- Code Box -->
+                    <div style="background-color: #1a1a1a; border: 1px solid #ff003c; border-radius: 12px; padding: 20px; text-align: center; margin: 0 auto 30px auto; width: 80%;">
+                      <span style="color: #ffffff; font-size: 36px; font-weight: bold; letter-spacing: 8px; font-family: monospace;">${code}</span>
+                    </div>
+
+                    <p style="color: #666666; font-size: 14px; text-align: center; margin: 0 0 0 0;">
+                      Ce code est valable pendant <strong style="color: #ff003c;">24 heures</strong>.
+                    </p>
+                    <p style="color: #666666; font-size: 14px; text-align: center; margin: 10px 0 0 0;">
+                      Si vous n'êtes pas à l'origine de cette demande, vous pouvez ignorer cet email en toute sécurité.
+                    </p>
+                  </td>
+                </tr>
+
+                <!-- Footer -->
+                <tr>
+                  <td style="background-color: #000000; padding: 30px; border-top: 1px solid #222222; text-align: center;" bgcolor="#000000">
+                    <p style="color: #ffffff; font-weight: bold; font-size: 14px; margin: 0 0 10px 0; text-transform: uppercase;">Tommobilty Maroc</p>
+                    <p style="color: #666666; font-size: 12px; margin: 0 0 20px 0;">L'expérience automobile premium.</p>
+                    
+                    <!-- Social Links -->
+                    <div style="margin-bottom: 20px;">
+                      <a href="https://web.facebook.com/profile.php?id=61585338434243" style="color: #aaaaaa; text-decoration: none; margin: 0 10px; font-size: 12px;">Facebook</a>
+                      <span style="color: #333333;">|</span>
+                      <a href="https://www.instagram.com/tommobilty?igsh=d2xnZXR0ZGw5ZWg=" style="color: #aaaaaa; text-decoration: none; margin: 0 10px; font-size: 12px;">Instagram</a>
+                      <span style="color: #333333;">|</span>
+                      <a href="https://tommobilty.com" style="color: #aaaaaa; text-decoration: none; margin: 0 10px; font-size: 12px;">Site Web</a>
+                    </div>
+                    
+                    <p style="color: #444444; font-size: 10px; margin: 0;">
+                      © ${new Date().getFullYear()} Tommobilty. Tous droits réservés.<br>
+                      Ceci est un message automatique, merci de ne pas y répondre.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </body>
+      </html>
     `
   };
 

@@ -1,7 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
-require('dotenv').config();
+require('dotenv').config({ override: true });
 
 // Import routes
 const authRoutes = require('../src/routes/auth.routes');

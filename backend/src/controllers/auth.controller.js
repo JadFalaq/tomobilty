@@ -1,5 +1,6 @@
 const bcrypt = require('bcryptjs');
 const { OAuth2Client } = require('google-auth-library');
+const axios = require('axios');
 const prisma = require('../config/prisma');
 const { 
   generateAccessToken, 
@@ -36,8 +37,8 @@ const register = asyncHandler(async (req, res) => {
   // Hash password
   const hashedPassword = await bcrypt.hash(mot_de_passe, 12);
 
-  // Generate email verification token
-  const verificationToken = generateEmailVerificationToken(email);
+  // Generate email verification code
+  const verificationCode = generateVerificationCode();
 
   // Create user
   const user = await prisma.user.create({
@@ -48,7 +49,8 @@ const register = asyncHandler(async (req, res) => {
       prenom,
       telephone,
       adresse,
-      email_verification_token: verificationToken,
+      email_verification_code: verificationCode,
+      email_verified: false,
       email_verification_expires: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
     },
     select: {
@@ -73,33 +75,19 @@ const register = asyncHandler(async (req, res) => {
 
   // Send verification email
   try {
-    await sendEmailVerification(email, verificationToken);
+    await sendEmailVerification(email, verificationCode);
   } catch (error) {
     console.error('Failed to send verification email:', error);
-    // Don't fail registration if email fails
+    // Delete user if email fails
+    await prisma.user.delete({ where: { id: user.id } });
+    throw new AppError('Impossible d\'envoyer l\'email de vérification. Veuillez réessayer.', 500, 'EMAIL_SEND_FAILED');
   }
-
-  // Generate tokens
-  const accessToken = generateAccessToken(user.id);
-  const refreshToken = generateRefreshToken(user.id);
-  const refreshHash = await bcrypt.hash(refreshToken, 12);
-  try {
-    await prisma.refreshToken.upsert({
-      where: { user_id: user.id },
-      update: { token_hash: refreshHash },
-      create: { user_id: user.id, token_hash: refreshHash }
-    });
-  } catch (_) {}
 
   res.status(201).json({
     success: true,
-    message: 'Compte créé avec succès. Vérifiez votre email pour activer votre compte.',
+    message: 'Compte créé avec succès. Veuillez entrer le code de vérification envoyé par email.',
     data: {
-      user,
-      tokens: {
-        access: accessToken,
-        refresh: refreshToken
-      }
+      user
     }
   });
 });
@@ -122,6 +110,11 @@ const login = asyncHandler(async (req, res) => {
 
   if (!user || !user.mot_de_passe) {
     throw new AppError('Email ou mot de passe incorrect', 401, 'INVALID_CREDENTIALS');
+  }
+
+  // Check if email is verified
+  if (!user.email_verified) {
+    throw new AppError('Veuillez vérifier votre email avant de vous connecter', 403, 'EMAIL_NOT_VERIFIED');
   }
 
   // Check password
@@ -167,14 +160,36 @@ const googleAuth = asyncHandler(async (req, res) => {
     throw new AppError('Token Google requis', 400, 'MISSING_TOKEN');
   }
 
-  // Verify Google token
-  const ticket = await googleClient.verifyIdToken({
-    idToken: token,
-    audience: process.env.GOOGLE_CLIENT_ID
-  });
+  let email, given_name, family_name, sub;
 
-  const payload = ticket.getPayload();
-  const { email, given_name, family_name, sub } = payload;
+  try {
+    // Try to verify as ID Token first
+    const ticket = await googleClient.verifyIdToken({
+      idToken: token,
+      audience: process.env.GOOGLE_CLIENT_ID
+    });
+
+    const payload = ticket.getPayload();
+    email = payload.email;
+    given_name = payload.given_name;
+    family_name = payload.family_name;
+    sub = payload.sub;
+  } catch (idTokenError) {
+    // If ID Token verification fails, try as Access Token
+    try {
+      const response = await axios.get('https://www.googleapis.com/oauth2/v3/userinfo', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      email = response.data.email;
+      given_name = response.data.given_name;
+      family_name = response.data.family_name;
+      sub = response.data.sub;
+    } catch (accessTokenError) {
+      console.error('Google Auth Error:', accessTokenError.message);
+      throw new AppError('Token Google invalide', 401, 'INVALID_TOKEN');
+    }
+  }
 
   // Check if user exists
   let user = await prisma.user.findUnique({
@@ -271,47 +286,73 @@ const googleAuth = asyncHandler(async (req, res) => {
 
 // Verify email
 const verifyEmail = asyncHandler(async (req, res) => {
-  const { token } = req.body;
+  const { email, code } = req.body;
 
-  if (!token) {
-    throw new AppError('Token de vérification requis', 400, 'MISSING_TOKEN');
+  if (!email || !code) {
+    throw new AppError('Email et code de vérification requis', 400, 'MISSING_FIELDS');
   }
 
-  try {
-    const decoded = verifyToken(token);
-    
-    if (decoded.type !== 'email_verification') {
-      throw new AppError('Token invalide', 400, 'INVALID_TOKEN');
-    }
+  const user = await prisma.user.findUnique({
+    where: { email }
+  });
 
-    // Update user email verification status
-    const user = await prisma.user.update({
-      where: { email: decoded.email },
-      data: {
-        email_verified: true,
-        email_verification_token: null,
-        email_verification_expires: null
-      },
-      select: {
-        id: true,
-        email: true,
-        nom: true,
-        prenom: true,
-        email_verified: true
-      }
-    });
+  if (!user) {
+    throw new AppError('Utilisateur non trouvé', 404, 'USER_NOT_FOUND');
+  }
 
-    res.json({
+  if (user.email_verified) {
+    return res.json({
       success: true,
-      message: 'Email vérifié avec succès',
-      data: { user }
+      message: 'Email déjà vérifié'
     });
-  } catch (error) {
-    if (error.name === 'TokenExpiredError') {
-      throw new AppError('Token de vérification expiré', 400, 'TOKEN_EXPIRED');
-    }
-    throw new AppError('Token de vérification invalide', 400, 'INVALID_TOKEN');
   }
+
+  if (user.email_verification_code !== code) {
+    throw new AppError('Code de vérification invalide', 400, 'INVALID_CODE');
+  }
+
+  if (user.email_verification_expires && new Date() > user.email_verification_expires) {
+    throw new AppError('Code de vérification expiré', 400, 'CODE_EXPIRED');
+  }
+
+  // Update user email verification status
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      email_verified: true,
+      email_verification_code: null,
+      email_verification_expires: null
+    }
+  });
+
+  // Generate tokens for auto-login
+  const accessToken = generateAccessToken(user.id);
+  const refreshToken = generateRefreshToken(user.id);
+  const refreshHash = await bcrypt.hash(refreshToken, 12);
+  
+  try {
+    await prisma.refreshToken.upsert({
+      where: { user_id: user.id },
+      update: { token_hash: refreshHash },
+      create: { user_id: user.id, token_hash: refreshHash }
+    });
+  } catch (_) {}
+
+  res.json({
+    success: true,
+    message: 'Email vérifié avec succès',
+    data: {
+      user: {
+        ...user,
+        email_verified: true,
+        mot_de_passe: undefined
+      },
+      tokens: {
+        access: accessToken,
+        refresh: refreshToken
+      }
+    }
+  });
 });
 
 // Resend email verification
@@ -334,24 +375,24 @@ const resendVerification = asyncHandler(async (req, res) => {
     throw new AppError('Email déjà vérifié', 400, 'EMAIL_ALREADY_VERIFIED');
   }
 
-  // Generate new verification token
-  const verificationToken = generateEmailVerificationToken(email);
+  // Generate new verification code
+  const verificationCode = generateVerificationCode();
 
-  // Update user with new token
+  // Update user with new code
   await prisma.user.update({
     where: { email },
     data: {
-      email_verification_token: verificationToken,
+      email_verification_code: verificationCode,
       email_verification_expires: new Date(Date.now() + 24 * 60 * 60 * 1000)
     }
   });
 
   // Send verification email
-  await sendEmailVerification(email, verificationToken);
+  await sendEmailVerification(email, verificationCode);
 
   res.json({
     success: true,
-    message: 'Email de vérification envoyé'
+    message: 'Code de vérification envoyé'
   });
 });
 
@@ -537,7 +578,7 @@ const getProfile = asyncHandler(async (req, res) => {
 
 // Update user profile
 const updateProfile = asyncHandler(async (req, res) => {
-  const { nom, prenom, telephone, adresse, permis_conduire } = req.body;
+  const { nom, prenom, telephone, adresse, permis_conduire, cin, date_naissance, date_obtention_permis, certifie_age_21, certifie_permis_2ans } = req.body;
 
   const user = await prisma.user.update({
     where: { id: req.user.id },
@@ -546,7 +587,12 @@ const updateProfile = asyncHandler(async (req, res) => {
       ...(prenom && { prenom }),
       ...(telephone && { telephone }),
       ...(adresse && { adresse }),
-      ...(permis_conduire && { permis_conduire })
+      ...(permis_conduire && { permis_conduire }),
+      ...(cin && { cin }),
+      ...(date_naissance && { date_naissance: new Date(date_naissance) }),
+      ...(date_obtention_permis && { date_obtention_permis: new Date(date_obtention_permis) }),
+      ...(certifie_age_21 !== undefined && { certifie_age_21 }),
+      ...(certifie_permis_2ans !== undefined && { certifie_permis_2ans })
     },
     select: {
       id: true,
@@ -558,7 +604,12 @@ const updateProfile = asyncHandler(async (req, res) => {
       role: true,
       email_verified: true,
       phone_verified: true,
-      permis_conduire: true
+      permis_conduire: true,
+      cin: true,
+      date_naissance: true,
+      date_obtention_permis: true,
+      certifie_age_21: true,
+      certifie_permis_2ans: true
     }
   });
 

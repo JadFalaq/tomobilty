@@ -1,13 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  FaShieldAlt as ShieldCheck, FaCheck as Check, FaTimes as X, FaChevronRight as ChevronRight,
-  FaArrowLeft as ArrowLeft, FaUser as User, FaEnvelope as Mail, FaClock as Clock,
+  FaCheck as Check, FaTimes as X, FaChevronRight as ChevronRight,
+  FaUser as User, FaEnvelope as Mail, FaClock as Clock,
   FaIdCard as IdCard, FaBriefcase as Briefcase, FaCreditCard as CreditCard, FaWallet as Wallet,
   FaMapMarkerAlt as MapPin, FaHome as Home, FaGlobe as Globe, FaMap as Map, FaBolt as Zap,
   FaShieldAlt as Shield
 } from 'react-icons/fa';
-import { protectionService } from '../services/protection.service';
 import { bookingService } from '../services/booking.service';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -27,9 +26,7 @@ function SectionTitle({ subtitle, title }) {
 
 function ReservationFlow({ car, searchParams, onClose, onComplete }) {
   const { user } = useAuth();
-  const [step, setStep] = useState('protection');
-  const [protections, setProtections] = useState([]);
-  const [selectedProt, setSelectedProt] = useState(null);
+  const [step, setStep] = useState('checkout');
   const [paymentMode, setPaymentMode] = useState('EN_LIGNE');
   const [loading, setLoading] = useState(false);
 
@@ -44,12 +41,14 @@ function ReservationFlow({ car, searchParams, onClose, onComplete }) {
     fullName: user?.prenom && user?.nom ? `${user.prenom} ${user.nom}` : "",
     email: user?.email || "",
     phone: user?.telephone || "",
-    idNumber: "",
-    licenseNumber: "",
+    idNumber: user?.cin || "", // Autofill CIN
+    licenseNumber: user?.permis_conduire || "", // Autofill Permit
     certifyAge: false,
     certifyLicenseOld: false
   });
 
+  // Removed protection fetching as requested
+  /* 
   useEffect(() => {
     fetchProtections();
   }, []);
@@ -63,6 +62,7 @@ function ReservationFlow({ car, searchParams, onClose, onComplete }) {
       }
     }
   };
+  */
 
   const calculateDays = () => {
     if (!searchParams.startDate || !searchParams.endDate) return 0;
@@ -77,8 +77,7 @@ function ReservationFlow({ car, searchParams, onClose, onComplete }) {
   const dailyPrice = car.pricing?.daily_price || car.prix_par_jour;
   // Use the total price from search results if available, otherwise calculate
   const subtotal = car.pricing?.total_price || (dailyPrice * durationDays);
-  const protectionTotal = selectedProt ? (selectedProt.frais_par_jour || 0) * durationDays : 0;
-  const totalAmount = subtotal + protectionTotal;
+  const totalAmount = subtotal;
 
   const isFormValid = useMemo(() => {
     return (
@@ -106,7 +105,7 @@ function ReservationFlow({ car, searchParams, onClose, onComplete }) {
         pickupSiteId: searchParams.pickupSiteId,
         returnSiteId: searchParams.returnSiteId,
         modePaiement: paymentMode,
-        protectionId: selectedProt?.id,
+        protectionId: null,
         pilotInfo,
         billingInfo
       };
@@ -149,7 +148,8 @@ function ReservationFlow({ car, searchParams, onClose, onComplete }) {
             {/* LEFT COLUMN */}
             <div className="lg:col-span-8 space-y-10">
               <AnimatePresence mode="wait">
-                {/* STEP 1: PROTECTION */}
+                {/* STEP 1: PROTECTION - DISABLED */}
+                {/* 
                 {step === 'protection' && (
                   <motion.div
                     key="step-p"
@@ -243,6 +243,7 @@ function ReservationFlow({ car, searchParams, onClose, onComplete }) {
                     </button>
                   </motion.div>
                 )}
+                */}
 
                 {/* STEP 2: CHECKOUT */}
                 {step === 'checkout' && (
@@ -253,15 +254,17 @@ function ReservationFlow({ car, searchParams, onClose, onComplete }) {
                     transition={{ duration: 0.4 }}
                     className="space-y-10"
                   >
+                    {/*
                     <button
                       onClick={() => setStep('protection')}
                       className="flex items-center gap-2 text-[10px] font-black uppercase text-white/30 hover:text-white mb-6"
                     >
                       <ArrowLeft size={14} /> Retour à la protection
                     </button>
+                    */}
 
                     <SectionTitle
-                      subtitle="Protocol_Step_02"
+                      subtitle="Protocol_Step_01"
                       title="COORDONNÉES ET FACTURATION"
                     />
 
@@ -577,6 +580,7 @@ function ReservationFlow({ car, searchParams, onClose, onComplete }) {
                         {durationDays} jour{durationDays > 1 ? 's' : ''}
                       </p>
                     </div>
+                    {/* Protection removed
                     <div className="flex justify-between items-center">
                       <p className="text-[9px] font-black uppercase text-white/30 italic">
                         Protection
@@ -585,6 +589,7 @@ function ReservationFlow({ car, searchParams, onClose, onComplete }) {
                         {selectedProt?.type || 'STANDARD'}
                       </p>
                     </div>
+                    */}
 
                     {(billingInfo.city || billingInfo.address) && (
                       <div className="flex justify-between items-start border-t border-white/5 pt-4">
@@ -604,10 +609,12 @@ function ReservationFlow({ car, searchParams, onClose, onComplete }) {
                       <span>Location ({durationDays}j)</span>
                       <span>{subtotal.toLocaleString()} MAD</span>
                     </div>
+                    {/* Protection cost removed
                     <div className="flex justify-between text-[10px] font-bold text-white/50 uppercase italic">
                       <span>Pack Protection</span>
                       <span>+{protectionTotal.toLocaleString()} MAD</span>
                     </div>
+                    */}
 
                     <div className="flex justify-between items-end pt-8 border-t border-[#ff003c]/30 mt-8">
                       <div>
@@ -624,7 +631,7 @@ function ReservationFlow({ car, searchParams, onClose, onComplete }) {
                 </motion.div>
 
                 <div className="px-10 flex items-center gap-3 text-[8px] font-black uppercase text-white/20 tracking-[0.2em] italic">
-                  <ShieldCheck size={16} className="text-green-500 flex-shrink-0" /> Sécurisé par
+                  <Shield size={16} className="text-green-500 flex-shrink-0" /> Sécurisé par
                   Tomobilty Encryption System
                 </div>
               </div>

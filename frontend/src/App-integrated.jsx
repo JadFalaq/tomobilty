@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useGoogleLogin } from '@react-oauth/google';
 import { 
   FaCar as Car, FaMapMarkerAlt as MapPin, FaCalendar as Calendar, FaSearch as Search,
   FaUser as User, FaBolt as Zap, FaShieldAlt as ShieldCheck, FaCompass as Navigation,
@@ -16,10 +17,12 @@ import { paymentService } from './services/payment.service';
 import { protectionService } from './services/protection.service';
 import { pickupSiteService } from './services/pickupsite.service';
 import { loyaltyService } from './services/loyalty.service';
+import { adminService } from './services/admin.service';
 import { formatDateForAPI, formatDateForDisplay, formatPrice } from './utils/dateUtils';
 import CustomCalendar from './components/CustomCalendar';
 import SearchResultsPage from './components/SearchResultsPage';
 import BookingDetailPage from './components/BookingDetailPage';
+import AboutPage from './components/AboutPage';
 
 const THEME = {
   black: '#000000',
@@ -121,9 +124,9 @@ function Footer({ setView }) {
                 </button>
               </li>
               <li>
-                <a href="#" className="text-white/60 hover:text-[#ff003c] text-sm font-bold transition-colors">
+                <button onClick={() => setView('about')} className="text-white/60 hover:text-[#ff003c] text-sm font-bold transition-colors">
                   À Propos
-                </a>
+                </button>
               </li>
             </ul>
           </div>
@@ -218,6 +221,9 @@ function Navbar({ currentView, setView, onOpenAuth, user, onLogout }) {
           {user && (
             <button onClick={() => setView('bookings')} className={`hover:text-[#ff003c] transition-colors ${currentView === 'bookings' ? 'text-[#ff003c]' : ''}`}>Réservations</button>
           )}
+          {user?.role === 'ADMIN' && (
+            <button onClick={() => setView('admin')} className={`hover:text-[#ff003c] transition-colors ${currentView === 'admin' ? 'text-[#ff003c]' : ''}`}>Admin</button>
+          )}
         </div>
 
         <div className="flex items-center gap-4">
@@ -284,7 +290,12 @@ function UserProfile() {
     prenom: user?.prenom || '',
     telephone: user?.telephone || '',
     adresse: user?.adresse || '',
-    permis_conduire: user?.permis_conduire || ''
+    permis_conduire: user?.permis_conduire || '',
+    cin: user?.cin || '',
+    date_naissance: user?.date_naissance ? new Date(user.date_naissance).toISOString().split('T')[0] : '',
+    date_obtention_permis: user?.date_obtention_permis ? new Date(user.date_obtention_permis).toISOString().split('T')[0] : '',
+    certifie_age_21: user?.certifie_age_21 || false,
+    certifie_permis_2ans: user?.certifie_permis_2ans || false
   });
 
   useEffect(() => {
@@ -304,7 +315,12 @@ function UserProfile() {
       prenom: user?.prenom || '',
       telephone: user?.telephone || '',
       adresse: user?.adresse || '',
-      permis_conduire: user?.permis_conduire || ''
+      permis_conduire: user?.permis_conduire || '',
+      cin: user?.cin || '',
+      date_naissance: user?.date_naissance ? new Date(user.date_naissance).toISOString().split('T')[0] : '',
+      date_obtention_permis: user?.date_obtention_permis ? new Date(user.date_obtention_permis).toISOString().split('T')[0] : '',
+      certifie_age_21: user?.certifie_age_21 || false,
+      certifie_permis_2ans: user?.certifie_permis_2ans || false
     });
   }, [user]);
 
@@ -319,6 +335,14 @@ function UserProfile() {
   }, [account, tier]);
 
   const submitEdit = async () => {
+    if (!form.cin || !form.permis_conduire || !form.date_naissance || !form.date_obtention_permis) {
+      alert("Tous les champs sont obligatoires (CIN, Permis, Dates).");
+      return;
+    }
+    if (!form.certifie_age_21 || !form.certifie_permis_2ans) {
+      alert("Vous devez certifier votre âge et l'ancienneté de votre permis.");
+      return;
+    }
     const result = await updateProfile(form);
     if (result?.success) {
       setEditing(false);
@@ -366,17 +390,53 @@ function UserProfile() {
                   </div>
                   <input value={form.telephone} onChange={e => setForm({...form, telephone: e.target.value})} placeholder="Téléphone" className="bg-white/5 border border-white/10 p-3 rounded-xl text-xs font-bold outline-none focus:border-[#ff003c]" />
                   <input value={form.adresse} onChange={e => setForm({...form, adresse: e.target.value})} placeholder="Adresse" className="bg-white/5 border border-white/10 p-3 rounded-xl text-xs font-bold outline-none focus:border-[#ff003c]" />
-                  <input value={form.permis_conduire} onChange={e => setForm({...form, permis_conduire: e.target.value})} placeholder="Permis de conduire" className="bg-white/5 border border-white/10 p-3 rounded-xl text-xs font-bold outline-none focus:border-[#ff003c]" />
-                  <button onClick={submitEdit} className="mt-2 px-6 py-3 bg-[#ff003c] text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white hover:text-black transition-all">
-                    Enregistrer
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <input value={form.cin} onChange={e => setForm({...form, cin: e.target.value})} placeholder="CIN" className="bg-white/5 border border-white/10 p-3 rounded-xl text-xs font-bold outline-none focus:border-[#ff003c]" />
+                    <input value={form.permis_conduire} onChange={e => setForm({...form, permis_conduire: e.target.value})} placeholder="Permis" className="bg-white/5 border border-white/10 p-3 rounded-xl text-xs font-bold outline-none focus:border-[#ff003c]" />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[9px] font-black uppercase text-white/40 mb-1">Date Naissance</label>
+                      <input type="date" value={form.date_naissance} onChange={e => setForm({...form, date_naissance: e.target.value})} className="w-full bg-white/5 border border-white/10 p-3 rounded-xl text-xs font-bold outline-none focus:border-[#ff003c] text-white" />
+                    </div>
+                    <div>
+                      <label className="block text-[9px] font-black uppercase text-white/40 mb-1">Obtention Permis</label>
+                      <input type="date" value={form.date_obtention_permis} onChange={e => setForm({...form, date_obtention_permis: e.target.value})} className="w-full bg-white/5 border border-white/10 p-3 rounded-xl text-xs font-bold outline-none focus:border-[#ff003c] text-white" />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 pt-2">
+                    <label className="flex items-center gap-2 cursor-pointer group">
+                      <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${form.certifie_age_21 ? 'bg-[#ff003c] border-[#ff003c]' : 'border-white/20 group-hover:border-[#ff003c]'}`}>
+                        {form.certifie_age_21 && <Check size={10} className="text-white" />}
+                      </div>
+                      <input type="checkbox" checked={form.certifie_age_21} onChange={e => setForm({...form, certifie_age_21: e.target.checked})} className="hidden" />
+                      <span className="text-[10px] text-white/60 font-bold uppercase">Je certifie avoir plus de 21 ans</span>
+                    </label>
+                    
+                    <label className="flex items-center gap-2 cursor-pointer group">
+                      <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${form.certifie_permis_2ans ? 'bg-[#ff003c] border-[#ff003c]' : 'border-white/20 group-hover:border-[#ff003c]'}`}>
+                        {form.certifie_permis_2ans && <Check size={10} className="text-white" />}
+                      </div>
+                      <input type="checkbox" checked={form.certifie_permis_2ans} onChange={e => setForm({...form, certifie_permis_2ans: e.target.checked})} className="hidden" />
+                      <span className="text-[10px] text-white/60 font-bold uppercase">Plus de 2 ans de permis</span>
+                    </label>
+                  </div>
+
+                  <button onClick={submitEdit} className="mt-2 px-6 py-3 bg-[#ff003c] text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white hover:text-black transition-all w-full">
+                    Enregistrer les modifications
                   </button>
                 </div>
               ) : (
                 <div className="space-y-6">
                   <InfoItem icon={<Mail size={16} />} label="Contact" value={user?.email} />
                   <InfoItem icon={<Phone size={16} />} label="Mobile" value={user?.telephone} />
-                  <InfoItem icon={<ShieldCheck size={16} />} label="Identité (CIN)" value={user?.cin_number} />
+                  <InfoItem icon={<ShieldCheck size={16} />} label="Identité (CIN)" value={user?.cin} />
                   <InfoItem icon={<IdCard size={16} />} label="Permis" value={user?.permis_conduire} />
+                  {user?.date_naissance && <InfoItem icon={<Calendar size={16} />} label="Né(e) le" value={new Date(user.date_naissance).toLocaleDateString()} />}
+                  {user?.date_obtention_permis && <InfoItem icon={<Calendar size={16} />} label="Permis depuis" value={new Date(user.date_obtention_permis).toLocaleDateString()} />}
                 </div>
               )}
             </div>
@@ -589,7 +649,7 @@ function CategorySelector({ categories, selectedCat, onSelect, showHelper }) {
 }
 
 function AuthPortal({ isOpen, onClose }) {
-  const { login, register } = useAuth();
+  const { login, register, googleLogin, verifyEmail } = useAuth();
   const [mode, setMode] = useState('login');
   const [formData, setFormData] = useState({
     email: '',
@@ -598,8 +658,34 @@ function AuthPortal({ isOpen, onClose }) {
     prenom: '',
     telephone: '',
   });
+  const [verificationCode, setVerificationCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+
+  const handleGoogleLogin = useGoogleLogin({
+    onSuccess: async (tokenResponse) => {
+      setLoading(true);
+      setError(null);
+      try {
+        // useGoogleLogin with default flow returns access_token in tokenResponse.access_token
+        const result = await googleLogin(tokenResponse.access_token);
+        if (result.success) {
+          onClose();
+          setFormData({ email: '', password: '', nom: '', prenom: '', telephone: '' });
+          setVerificationCode('');
+          setMode('login');
+        } else {
+          setError(result.error?.message || 'Erreur lors de la connexion Google');
+        }
+      } catch (err) {
+        console.error("Google Login Error:", err);
+        setError('Une erreur est survenue avec Google');
+      } finally {
+        setLoading(false);
+      }
+    },
+    onError: () => setError('Échec de la connexion Google'),
+  });
   
   const handleAuthSubmit = async (e) => {
     e.preventDefault();
@@ -610,13 +696,21 @@ function AuthPortal({ isOpen, onClose }) {
       let result;
       if (mode === 'login') {
         result = await login(formData.email, formData.password);
-      } else {
+      } else if (mode === 'register') {
         result = await register(formData);
+      } else if (mode === 'verify') {
+        result = await verifyEmail(formData.email, verificationCode);
       }
 
       if (result.success) {
-        onClose();
-        setFormData({ email: '', password: '', nom: '', prenom: '', telephone: '' });
+        if (mode === 'register') {
+          setMode('verify');
+        } else {
+          onClose();
+          setFormData({ email: '', password: '', nom: '', prenom: '', telephone: '' });
+          setVerificationCode('');
+          setMode('login');
+        }
       } else {
         setError(result.error?.message || 'Une erreur est survenue');
       }
@@ -645,6 +739,16 @@ function AuthPortal({ isOpen, onClose }) {
                     <h2 className="text-4xl md:text-5xl font-black italic uppercase text-white mb-6 leading-none tracking-tighter">Réservez plus vite. <br/><span className="text-[#ff003c]">Voyagez malin.</span></h2>
                     <p className="text-white/40 font-medium text-lg leading-relaxed mb-10 italic">Accédez à des réservations plus rapidement et gérez vos voyages en toute simplicité.</p>
                   </>
+                ) : mode === 'verify' ? (
+                  <>
+                    <h2 className="text-4xl md:text-5xl font-black italic uppercase text-white mb-8 leading-none tracking-tighter">Vérification <span className="text-[#ff003c]">Email</span></h2>
+                    <p className="text-white/40 font-medium text-lg leading-relaxed mb-10 italic">
+                      Nous avons envoyé un code de vérification à <strong className="text-white">{formData.email}</strong>.
+                    </p>
+                    <p className="text-white/40 font-medium text-sm leading-relaxed mb-10 italic">
+                      Veuillez consulter votre boîte de réception (et vos spams) pour récupérer le code.
+                    </p>
+                  </>
                 ) : (
                   <>
                     <h2 className="text-4xl md:text-5xl font-black italic uppercase text-white mb-8 leading-none tracking-tighter">Créer un <span className="text-[#ff003c]">compte</span></h2>
@@ -666,70 +770,90 @@ function AuthPortal({ isOpen, onClose }) {
                   </div>
                 )}
                 
-                <div className="space-y-4 text-left">
-                  <label className="text-[10px] font-black text-[#ff003c] uppercase tracking-[0.4em] ml-2">Votre e-mail</label>
-                  <div className="relative group">
-                    <Mail className="absolute left-6 top-1/2 -translate-y-1/2 text-white/20 group-focus-within:text-[#ff003c] transition-colors" size={20} />
-                    <input 
-                      type="email" 
-                      required 
-                      value={formData.email}
-                      onChange={(e) => setFormData({...formData, email: e.target.value})}
-                      placeholder="exemple@domaine.ma" 
-                      className="w-full bg-white/5 border border-white/10 p-6 pl-16 rounded-[2rem] text-sm font-bold text-white outline-none focus:border-[#ff003c] transition-all placeholder:text-white/10" 
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-4 text-left">
-                  <label className="text-[10px] font-black text-[#ff003c] uppercase tracking-[0.4em] ml-2">Mot de passe</label>
-                  <div className="relative group">
-                    <Lock className="absolute left-6 top-1/2 -translate-y-1/2 text-white/20 group-focus-within:text-[#ff003c] transition-colors" size={20} />
-                    <input 
-                      type="password" 
-                      required 
-                      value={formData.password}
-                      onChange={(e) => setFormData({...formData, password: e.target.value})}
-                      placeholder="••••••••" 
-                      className="w-full bg-white/5 border border-white/10 p-6 pl-16 rounded-[2rem] text-sm font-bold text-white outline-none focus:border-[#ff003c] transition-all placeholder:text-white/10" 
-                    />
-                  </div>
-                </div>
-
-                {mode === 'register' && (
-                  <>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2 text-left">
-                        <label className="text-[10px] font-black text-[#ff003c] uppercase tracking-[0.4em] ml-2">Nom</label>
-                        <input 
-                          type="text" 
-                          required 
-                          value={formData.nom}
-                          onChange={(e) => setFormData({...formData, nom: e.target.value})}
-                          className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-sm font-bold text-white outline-none focus:border-[#ff003c]" 
-                        />
-                      </div>
-                      <div className="space-y-2 text-left">
-                        <label className="text-[10px] font-black text-[#ff003c] uppercase tracking-[0.4em] ml-2">Prénom</label>
-                        <input 
-                          type="text" 
-                          required 
-                          value={formData.prenom}
-                          onChange={(e) => setFormData({...formData, prenom: e.target.value})}
-                          className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-sm font-bold text-white outline-none focus:border-[#ff003c]" 
-                        />
-                      </div>
-                    </div>
-                    <div className="space-y-2 text-left">
-                      <label className="text-[10px] font-black text-[#ff003c] uppercase tracking-[0.4em] ml-2">Téléphone</label>
+                {mode === 'verify' ? (
+                  <div className="space-y-4 text-left">
+                    <label className="text-[10px] font-black text-[#ff003c] uppercase tracking-[0.4em] ml-2">Code de vérification</label>
+                    <div className="relative group">
+                      <ShieldCheck className="absolute left-6 top-1/2 -translate-y-1/2 text-white/20 group-focus-within:text-[#ff003c] transition-colors" size={20} />
                       <input 
-                        type="tel" 
-                        value={formData.telephone}
-                        onChange={(e) => setFormData({...formData, telephone: e.target.value})}
-                        placeholder="+212 6XX XXX XXX"
-                        className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-sm font-bold text-white outline-none focus:border-[#ff003c]" 
+                        type="text" 
+                        required 
+                        value={verificationCode}
+                        onChange={(e) => setVerificationCode(e.target.value)}
+                        placeholder="123456" 
+                        maxLength="6"
+                        className="w-full bg-white/5 border border-white/10 p-6 pl-16 rounded-[2rem] text-sm font-bold text-white outline-none focus:border-[#ff003c] transition-all placeholder:text-white/10 tracking-[0.5em] text-center text-2xl" 
                       />
                     </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="space-y-4 text-left">
+                      <label className="text-[10px] font-black text-[#ff003c] uppercase tracking-[0.4em] ml-2">Votre e-mail</label>
+                      <div className="relative group">
+                        <Mail className="absolute left-6 top-1/2 -translate-y-1/2 text-white/20 group-focus-within:text-[#ff003c] transition-colors" size={20} />
+                        <input 
+                          type="email" 
+                          required 
+                          value={formData.email}
+                          onChange={(e) => setFormData({...formData, email: e.target.value})}
+                          placeholder="exemple@domaine.ma" 
+                          className="w-full bg-white/5 border border-white/10 p-6 pl-16 rounded-[2rem] text-sm font-bold text-white outline-none focus:border-[#ff003c] transition-all placeholder:text-white/10" 
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-4 text-left">
+                      <label className="text-[10px] font-black text-[#ff003c] uppercase tracking-[0.4em] ml-2">Mot de passe</label>
+                      <div className="relative group">
+                        <Lock className="absolute left-6 top-1/2 -translate-y-1/2 text-white/20 group-focus-within:text-[#ff003c] transition-colors" size={20} />
+                        <input 
+                          type="password" 
+                          required 
+                          value={formData.password}
+                          onChange={(e) => setFormData({...formData, password: e.target.value})}
+                          placeholder="••••••••" 
+                          className="w-full bg-white/5 border border-white/10 p-6 pl-16 rounded-[2rem] text-sm font-bold text-white outline-none focus:border-[#ff003c] transition-all placeholder:text-white/10" 
+                        />
+                      </div>
+                    </div>
+
+                    {mode === 'register' && (
+                      <>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-2 text-left">
+                            <label className="text-[10px] font-black text-[#ff003c] uppercase tracking-[0.4em] ml-2">Nom</label>
+                            <input 
+                              type="text" 
+                              required 
+                              value={formData.nom}
+                              onChange={(e) => setFormData({...formData, nom: e.target.value})}
+                              className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-sm font-bold text-white outline-none focus:border-[#ff003c]" 
+                            />
+                          </div>
+                          <div className="space-y-2 text-left">
+                            <label className="text-[10px] font-black text-[#ff003c] uppercase tracking-[0.4em] ml-2">Prénom</label>
+                            <input 
+                              type="text" 
+                              required 
+                              value={formData.prenom}
+                              onChange={(e) => setFormData({...formData, prenom: e.target.value})}
+                              className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-sm font-bold text-white outline-none focus:border-[#ff003c]" 
+                            />
+                          </div>
+                        </div>
+                        <div className="space-y-2 text-left">
+                          <label className="text-[10px] font-black text-[#ff003c] uppercase tracking-[0.4em] ml-2">Téléphone</label>
+                          <input 
+                            type="tel" 
+                            value={formData.telephone}
+                            onChange={(e) => setFormData({...formData, telephone: e.target.value})}
+                            placeholder="+212 6XX XXX XXX"
+                            className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-sm font-bold text-white outline-none focus:border-[#ff003c]" 
+                          />
+                        </div>
+                      </>
+                    )}
                   </>
                 )}
 
@@ -738,16 +862,24 @@ function AuthPortal({ isOpen, onClose }) {
                   disabled={loading}
                   className="w-full py-6 bg-[#ff003c] text-white font-black uppercase italic rounded-[2rem] shadow-[0_15px_30px_rgba(255,0,60,0.3)] hover:scale-[1.02] active:scale-95 transition-all text-sm tracking-widest disabled:opacity-50"
                 >
-                  {loading ? 'CHARGEMENT...' : (mode === 'login' ? 'INITIALISER CONNEXION' : 'VALIDER INSCRIPTION')}
+                  {loading ? 'CHARGEMENT...' : (mode === 'login' ? 'INITIALISER CONNEXION' : mode === 'register' ? 'VALIDER INSCRIPTION' : 'VÉRIFIER LE CODE')}
                 </button>
 
-                <div className="relative py-4 text-center">
-                  <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-white/5"></div></div>
-                  <span className="relative bg-[#050505] px-4 text-[8px] font-black uppercase text-white/20 tracking-[0.4em]">OU AVEC</span>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <button type="button" className="flex items-center justify-center gap-3 py-4 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all"><GoogleIcon/><span className="text-[10px] font-black uppercase">Google</span></button>
-                </div>
+                {mode !== 'verify' ? (
+                  <>
+                    <div className="relative py-4 text-center">
+                      <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-white/5"></div></div>
+                      <span className="relative bg-[#050505] px-4 text-[8px] font-black uppercase text-white/20 tracking-[0.4em]">OU AVEC</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <button type="button" onClick={() => handleGoogleLogin()} className="flex items-center justify-center gap-3 py-4 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all"><GoogleIcon/><span className="text-[10px] font-black uppercase">Google</span></button>
+                    </div>
+                  </>
+                ) : (
+                   <div className="mt-4 text-center">
+                     <button type="button" onClick={() => setMode('register')} className="text-[10px] font-black text-white/40 hover:text-white uppercase tracking-widest transition-colors">Retour à l'inscription</button>
+                   </div>
+                )}
               </form>
               <div className="mt-12 pt-8 border-t border-white/5 text-center">
                 {mode === 'login' ? (
@@ -755,12 +887,12 @@ function AuthPortal({ isOpen, onClose }) {
                     <p className="text-[10px] font-bold text-white/30 uppercase tracking-widest italic">Nouveau sur Tommobilty ?</p>
                     <button onClick={() => setMode('register')} className="w-full py-4 border border-white/10 hover:border-[#ff003c] hover:text-[#ff003c] text-white/60 font-black uppercase italic rounded-[2rem] transition-all text-[10px] tracking-[0.2em]">CRÉER UN COMPTE</button>
                   </div>
-                ) : (
+                ) : mode === 'register' ? (
                   <div className="space-y-4">
                     <p className="text-[10px] font-bold text-white/30 uppercase tracking-widest italic">Vous avez déjà un compte ?</p>
                     <button onClick={() => setMode('login')} className="w-full py-4 border border-white/10 hover:border-[#ff003c] hover:text-[#ff003c] text-white/60 font-black uppercase italic rounded-[2rem] transition-all text-[10px] tracking-[0.2em]">SE CONNECTER</button>
                   </div>
-                )}
+                ) : null}
               </div>
             </div>
           </motion.div>
@@ -1520,6 +1652,700 @@ function BookingsPage({ setView, onViewDetail }) {
   );
 }
 
+const getCarStatusDisplay = (status) => {
+  switch (status) {
+    case 'DISPONIBLE':
+      return { label: 'DISPONIBLE', style: 'text-green-400 border-green-400/30 bg-green-400/5' };
+    case 'LOUE':
+      return { label: 'LOUÉE', style: 'text-[#ff003c] border-[#ff003c]/30 bg-[#ff003c]/5' };
+    case 'MAINTENANCE':
+      return { label: 'MAINTENANCE', style: 'text-yellow-400 border-yellow-400/30 bg-yellow-400/5' };
+    default:
+      return { label: status || '—', style: 'text-white/30 border-white/10 bg-white/5' };
+  }
+};
+
+const getBookingStatusDisplay = (status) => {
+  switch (status) {
+    case 'EN_ATTENTE':
+      return { label: 'EN ATTENTE', style: 'text-yellow-400 border-yellow-400/30 bg-yellow-400/5' };
+    case 'EN_COURS':
+      return { label: 'EN COURS', style: 'text-[#ff003c] border-[#ff003c]/30 bg-[#ff003c]/5' };
+    case 'TERMINE':
+      return { label: 'TERMINE', style: 'text-green-400 border-green-400/30 bg-green-400/5' };
+    case 'ANNULE':
+      return { label: 'ANNULE', style: 'text-white/30 border-white/10 bg-white/5' };
+    default:
+      return { label: status || '—', style: 'text-white/30 border-white/10 bg-white/5' };
+  }
+};
+
+const normalizeNumber = (value) => {
+  if (typeof value === 'number') return value;
+  if (typeof value === 'string') return Number(value) || 0;
+  if (value && typeof value.toNumber === 'function') return value.toNumber();
+  return 0;
+};
+
+const normalizeArray = (value) => (Array.isArray(value) ? value : []);
+
+const extractGroupCount = (row) => {
+  if (!row) return 0;
+  if (typeof row._count === 'number') return row._count;
+  if (row._count && typeof row._count === 'object') {
+    const countValue = Object.values(row._count)[0];
+    return normalizeNumber(countValue);
+  }
+  if (row.count !== undefined) return normalizeNumber(row.count);
+  return 0;
+};
+
+const getGroupCount = (rows, target) => {
+  const match = normalizeArray(rows).find((item) =>
+    item?.statut === target || item?.status === target || item?.name === target
+  );
+  return extractGroupCount(match);
+};
+
+const buildDashboardMetrics = (stats, bookingStats) => {
+  const global = stats?.globalKPIs || {};
+  const carsByStatus = global.cars?.byStatus || [];
+  const totalCars = normalizeNumber(global.cars?.total);
+  const availableCars = getGroupCount(carsByStatus, 'DISPONIBLE');
+  const rentedCars = getGroupCount(carsByStatus, 'LOUE');
+  const totalBookings = normalizeNumber(global.bookings?.total);
+  const bookings30d = normalizeNumber(
+    global.bookings?.last30Days ?? bookingStats?.statistics?.total_bookings
+  );
+  const totalRevenue = normalizeNumber(
+    global.payments?.totalAmount ?? global.payments?.completed?.amount
+  );
+  const revenue30d = normalizeNumber(bookingStats?.statistics?.total_revenue);
+  const bookingStatusRows = normalizeArray(bookingStats?.statistics?.bookings_by_status).map((row) => ({
+    status: row.status || row.name || row.status_name || row.statut || row.status_id,
+    count: normalizeNumber(row.count || row._count)
+  }));
+
+  const fallbackBookingRows = normalizeArray(global.bookings?.byStatus).map((row) => ({
+    status: row.status || row.status_id,
+    count: extractGroupCount(row)
+  }));
+
+  const resolvedBookingRows = bookingStatusRows.length ? bookingStatusRows : fallbackBookingRows;
+  const recentBookings = normalizeArray(stats?.recentActivity?.bookings);
+
+  return {
+    totalCars,
+    availableCars,
+    rentedCars,
+    totalBookings,
+    totalRevenue,
+    revenue30d,
+    bookings30d,
+    bookingStatusRows: resolvedBookingRows,
+    recentBookings
+  };
+};
+
+function StatCard({ label, value, sublabel, icon, accent = '#ff003c' }) {
+  return (
+    <div className={`${GLASS} p-8 rounded-[2.5rem] border-white/5 relative overflow-hidden`}>
+      <div className="absolute -top-10 -right-10 text-white/5">{icon}</div>
+      <p className="text-[9px] font-black uppercase tracking-[0.3em] text-white/40 mb-3">{label}</p>
+      <p className="text-4xl font-black italic" style={{ color: accent }}>{value}</p>
+      {sublabel && <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/30 mt-2">{sublabel}</p>}
+    </div>
+  );
+}
+
+function ProgressRow({ label, value, total, color }) {
+  const percent = total > 0 ? Math.round((value / total) * 100) : 0;
+  return (
+    <div>
+      <div className="flex items-center justify-between text-[9px] font-black uppercase tracking-widest text-white/40 mb-2">
+        <span>{label}</span>
+        <span className="text-white">{value}</span>
+      </div>
+      <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden">
+        <div className="h-full" style={{ width: `${percent}%`, backgroundColor: color }} />
+      </div>
+    </div>
+  );
+}
+
+function AdminOverview() {
+  const [stats, setStats] = useState(null);
+  const [bookingStats, setBookingStats] = useState(null);
+  const [topCars, setTopCars] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+    const load = async () => {
+      setLoading(true);
+      const [statsRes, bookingRes, bookingsRes] = await Promise.all([
+        adminService.getDashboardStats(),
+        adminService.getBookingStatistics({ period: '30d' }),
+        adminService.listBookings({ page: 1, pageSize: 200, sortBy: 'date_creation', sortOrder: 'desc' })
+      ]);
+
+      if (!mounted) return;
+
+      if (statsRes.success) {
+        setStats(statsRes.stats);
+      }
+
+      if (bookingRes.success) {
+        setBookingStats(bookingRes.statistics);
+      }
+
+      if (bookingsRes.success) {
+        const counts = new Map();
+        bookingsRes.bookings.forEach((booking) => {
+          const car = booking.car;
+          const carId = car?.id || booking.car_id;
+          if (!carId) return;
+          const entry = counts.get(carId) || { car, count: 0 };
+          entry.count += 1;
+          counts.set(carId, entry);
+        });
+        const sorted = Array.from(counts.values()).sort((a, b) => b.count - a.count).slice(0, 5);
+        setTopCars(sorted);
+      }
+
+      setLoading(false);
+    };
+    load();
+    return () => { mounted = false; };
+  }, []);
+
+  const {
+    totalCars,
+    availableCars,
+    rentedCars,
+    totalBookings,
+    totalRevenue,
+    revenue30d,
+    bookings30d,
+    bookingStatusRows,
+    recentBookings
+  } = buildDashboardMetrics(stats, bookingStats);
+  const totalStatusBookings = bookingStatusRows.reduce((sum, row) => sum + normalizeNumber(row.count), 0);
+
+  if (loading) {
+    return (
+      <div className={`${GLASS} rounded-[3rem] p-12 border-white/5 text-center text-white/40 font-bold`}>
+        Chargement des statistiques...
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-10">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+        <StatCard label="Total Voitures" value={totalCars} icon={<Car size={140} />} />
+        <StatCard label="Disponibles" value={availableCars} icon={<Check size={140} />} accent="#4ade80" />
+        <StatCard label="Louées" value={rentedCars} icon={<TrendingUp size={140} />} accent="#ff003c" />
+        <StatCard label="Réservations" value={totalBookings} icon={<Calendar size={140} />} accent="#fbbf24" />
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        <div className={`${GLASS} p-10 rounded-[3rem] border-white/5 xl:col-span-2`}>
+          <h3 className="text-lg font-black italic uppercase text-white mb-8 flex items-center gap-3">
+            <TrendingUp className="text-[#ff003c]" /> Revenus & activité
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            <div className="bg-white/5 rounded-2xl p-6 border border-white/10">
+              <p className="text-[9px] font-black uppercase tracking-[0.3em] text-white/40 mb-2">Revenus totaux</p>
+              <p className="text-3xl font-black italic text-[#ff003c]">{formatPrice(totalRevenue)} MAD</p>
+            </div>
+            <div className="bg-white/5 rounded-2xl p-6 border border-white/10">
+              <p className="text-[9px] font-black uppercase tracking-[0.3em] text-white/40 mb-2">Revenus 30j</p>
+              <p className="text-3xl font-black italic text-white">{formatPrice(revenue30d)} MAD</p>
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/30 mt-2">{bookings30d} réservations</p>
+            </div>
+          </div>
+          <div className="space-y-4">
+            {bookingStatusRows.length === 0 ? (
+              <div className="text-white/40 text-sm font-bold">Aucun statut disponible</div>
+            ) : (
+              bookingStatusRows.map((row) => (
+                <ProgressRow
+                  key={row.status}
+                  label={row.status || 'INCONNU'}
+                  value={row.count || 0}
+                  total={totalStatusBookings}
+                  color={row.status === 'EN_COURS' ? '#ff003c' : row.status === 'TERMINE' ? '#4ade80' : row.status === 'EN_ATTENTE' ? '#fbbf24' : '#94a3b8'}
+                />
+              ))
+            )}
+          </div>
+        </div>
+
+        <div className={`${GLASS} p-10 rounded-[3rem] border-white/5`}>
+          <h3 className="text-lg font-black italic uppercase text-white mb-8 flex items-center gap-3">
+            <Award className="text-[#ff003c]" /> Top véhicules
+          </h3>
+          <div className="space-y-4">
+            {topCars.length === 0 ? (
+              <div className="text-white/40 text-sm font-bold">Aucune donnée</div>
+            ) : (
+              topCars.map((entry, index) => (
+                <div key={`${entry.car?.id || index}`} className="flex items-center justify-between bg-white/5 border border-white/10 rounded-2xl px-4 py-3">
+                  <div>
+                    <p className="text-[9px] font-black uppercase tracking-widest text-white/40">#{index + 1}</p>
+                    <p className="text-sm font-bold text-white">{entry.car?.brand?.name || '—'} {entry.car?.modele || ''}</p>
+                  </div>
+                  <span className="text-[#ff003c] font-black text-sm">{entry.count}</span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className={`${GLASS} p-10 rounded-[3rem] border-white/5`}>
+        <h3 className="text-lg font-black italic uppercase text-white mb-8 flex items-center gap-3">
+          <History className="text-[#ff003c]" /> Dernières réservations
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {recentBookings.length === 0 ? (
+            <div className="text-white/40 text-sm font-bold">Aucune réservation récente</div>
+          ) : (
+            recentBookings.map((booking) => {
+              const statusName = booking.status?.name || booking.status_name;
+              const status = getBookingStatusDisplay(statusName);
+              return (
+                <div key={booking.id} className="bg-white/5 border border-white/10 rounded-2xl p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <p className="text-[9px] font-black uppercase tracking-widest text-white/40">Réservation #{booking.id}</p>
+                      <p className="text-sm font-bold text-white">{booking.car?.brand?.name || '—'} {booking.car?.modele || ''}</p>
+                    </div>
+                    <span className={`px-3 py-1 rounded-xl border text-[9px] font-black uppercase tracking-widest ${status.style}`}>{status.label}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-[10px] font-bold text-white/40 uppercase tracking-widest">
+                    <span>{booking.user?.prenom || 'Client'} {booking.user?.nom || ''}</span>
+                    <span>{formatDateForDisplay(booking.date_debut)}</span>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AdminCars() {
+  const [cars, setCars] = useState([]);
+  const [brands, setBrands] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [pagination, setPagination] = useState(null);
+  const [editingId, setEditingId] = useState(null);
+  const [carImages, setCarImages] = useState([]);
+  const [imageUrl, setImageUrl] = useState('');
+  const [imagePrimary, setImagePrimary] = useState(true);
+  const [error, setError] = useState(null);
+  const [form, setForm] = useState({
+    brand_id: '',
+    category_id: '',
+    modele: '',
+    transmission: '',
+    nombre_places: '',
+    nombre_portes: '',
+    prix_par_jour: '',
+    statut: 'DISPONIBLE'
+  });
+
+  const loadCars = async (page = 1) => {
+    setLoading(true);
+    const result = await adminService.listCars({ page, pageSize: 20, sortBy: 'date_creation', sortOrder: 'desc' });
+    if (result.success) {
+      setCars(result.cars || []);
+      setPagination(result.pagination || null);
+    }
+    setLoading(false);
+  };
+
+  const loadLookups = async () => {
+    const [brandsRes, categoriesRes] = await Promise.all([
+      adminService.listCarBrands({ page: 1, pageSize: 200 }),
+      adminService.listCarCategories({ page: 1, pageSize: 200 })
+    ]);
+    if (brandsRes.success) setBrands(brandsRes.brands || []);
+    if (categoriesRes.success) setCategories(categoriesRes.categories || []);
+  };
+
+  useEffect(() => {
+    loadLookups();
+    loadCars();
+  }, []);
+
+  const resetForm = () => {
+    setForm({
+      brand_id: '',
+      category_id: '',
+      modele: '',
+      transmission: '',
+      nombre_places: '',
+      nombre_portes: '',
+      prix_par_jour: '',
+      statut: 'DISPONIBLE'
+    });
+    setEditingId(null);
+    setCarImages([]);
+    setImageUrl('');
+    setImagePrimary(true);
+    setError(null);
+  };
+
+  const handleEdit = async (carId) => {
+    const result = await adminService.getCarById(carId);
+    if (result.success) {
+      const car = result.car;
+      setEditingId(carId);
+      setForm({
+        brand_id: car.brand_id?.toString() || '',
+        category_id: car.category_id?.toString() || '',
+        modele: car.modele || '',
+        transmission: car.transmission || '',
+        nombre_places: car.nombre_places?.toString() || '',
+        nombre_portes: car.nombre_portes?.toString() || '',
+        prix_par_jour: car.prix_par_jour?.toString() || '',
+        statut: car.statut || 'DISPONIBLE'
+      });
+      setCarImages(car.images || []);
+      setImageUrl('');
+    }
+  };
+
+  const handleDelete = async (carId) => {
+    await adminService.deleteCar(carId);
+    loadCars(pagination?.page || 1);
+  };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    setError(null);
+    const payload = {
+      brand_id: form.brand_id ? parseInt(form.brand_id) : undefined,
+      category_id: form.category_id ? parseInt(form.category_id) : undefined,
+      modele: form.modele?.trim(),
+      transmission: form.transmission?.trim(),
+      nombre_places: form.nombre_places ? parseInt(form.nombre_places) : undefined,
+      nombre_portes: form.nombre_portes ? parseInt(form.nombre_portes) : undefined,
+      prix_par_jour: form.prix_par_jour ? parseFloat(form.prix_par_jour) : undefined,
+      statut: form.statut
+    };
+    const cleanedPayload = Object.fromEntries(Object.entries(payload).filter(([, value]) => value !== undefined && value !== ''));
+    const result = editingId
+      ? await adminService.updateCar(editingId, cleanedPayload)
+      : await adminService.createCar(cleanedPayload);
+
+    if (!result.success) {
+      setError(result.error?.message || 'Erreur lors de la sauvegarde');
+      return;
+    }
+
+    const carId = editingId || result.car?.id;
+    if (imageUrl && carId) {
+      await adminService.createCarImage({ car_id: carId, image_url: imageUrl, is_primary: imagePrimary });
+    }
+
+    resetForm();
+    loadCars(pagination?.page || 1);
+  };
+
+  const handleDeleteImage = async (imageId) => {
+    await adminService.deleteCarImage(imageId);
+    if (editingId) {
+      const result = await adminService.getCarById(editingId);
+      if (result.success) setCarImages(result.car.images || []);
+    }
+  };
+
+  const getBrandName = (brandId) => brands.find((b) => b.id === brandId)?.name || '—';
+  const getCategoryName = (categoryId) => categories.find((c) => c.id === categoryId)?.name || '—';
+
+  return (
+    <div className="space-y-10">
+      <div className={`${GLASS} p-10 rounded-[3rem] border-white/5`}>
+        <h3 className="text-xl font-black italic uppercase text-white mb-8 flex items-center gap-3">
+          <Car className="text-[#ff003c]" /> {editingId ? 'Modifier la voiture' : 'Ajouter une voiture'}
+        </h3>
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <label className="text-[9px] font-black uppercase tracking-widest text-white/40">Marque</label>
+              <select value={form.brand_id} onChange={(e) => setForm({ ...form, brand_id: e.target.value })} className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-xs font-bold outline-none focus:border-[#ff003c]">
+                <option value="">Sélectionner</option>
+                {brands.map((brand) => (
+                  <option key={brand.id} value={brand.id}>{brand.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-[9px] font-black uppercase tracking-widest text-white/40">Catégorie</label>
+              <select value={form.category_id} onChange={(e) => setForm({ ...form, category_id: e.target.value })} className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-xs font-bold outline-none focus:border-[#ff003c]">
+                <option value="">Sélectionner</option>
+                {categories.map((category) => (
+                  <option key={category.id} value={category.id}>{category.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-[9px] font-black uppercase tracking-widest text-white/40">Modèle</label>
+              <input value={form.modele} onChange={(e) => setForm({ ...form, modele: e.target.value })} className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-xs font-bold outline-none focus:border-[#ff003c]" />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[9px] font-black uppercase tracking-widest text-white/40">Transmission</label>
+              <input value={form.transmission} onChange={(e) => setForm({ ...form, transmission: e.target.value })} className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-xs font-bold outline-none focus:border-[#ff003c]" />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[9px] font-black uppercase tracking-widest text-white/40">Places</label>
+              <input type="number" value={form.nombre_places} onChange={(e) => setForm({ ...form, nombre_places: e.target.value })} className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-xs font-bold outline-none focus:border-[#ff003c]" />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[9px] font-black uppercase tracking-widest text-white/40">Portes</label>
+              <input type="number" value={form.nombre_portes} onChange={(e) => setForm({ ...form, nombre_portes: e.target.value })} className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-xs font-bold outline-none focus:border-[#ff003c]" />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[9px] font-black uppercase tracking-widest text-white/40">Prix / jour (MAD)</label>
+              <input type="number" value={form.prix_par_jour} onChange={(e) => setForm({ ...form, prix_par_jour: e.target.value })} className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-xs font-bold outline-none focus:border-[#ff003c]" />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[9px] font-black uppercase tracking-widest text-white/40">Statut</label>
+              <select value={form.statut} onChange={(e) => setForm({ ...form, statut: e.target.value })} className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-xs font-bold outline-none focus:border-[#ff003c]">
+                <option value="DISPONIBLE">DISPONIBLE</option>
+                <option value="LOUE">LOUÉE</option>
+                <option value="MAINTENANCE">MAINTENANCE</option>
+              </select>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="md:col-span-2 space-y-2">
+              <label className="text-[9px] font-black uppercase tracking-widest text-white/40">URL Image</label>
+              <input value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-xs font-bold outline-none focus:border-[#ff003c]" />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[9px] font-black uppercase tracking-widest text-white/40">Image principale</label>
+              <select value={imagePrimary ? 'true' : 'false'} onChange={(e) => setImagePrimary(e.target.value === 'true')} className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-xs font-bold outline-none focus:border-[#ff003c]">
+                <option value="true">Oui</option>
+                <option value="false">Non</option>
+              </select>
+            </div>
+          </div>
+          {error && <div className="text-red-500 text-sm font-bold">{error}</div>}
+          <div className="flex flex-wrap gap-4">
+            <button type="submit" className="px-6 py-3 bg-[#ff003c] text-white text-[10px] font-black uppercase tracking-[0.3em] rounded-2xl hover:bg-white hover:text-black transition-all">
+              {editingId ? 'Mettre à jour' : 'Créer'}
+            </button>
+            {editingId && (
+              <button type="button" onClick={resetForm} className="px-6 py-3 bg-white/5 border border-white/10 text-white text-[10px] font-black uppercase tracking-[0.3em] rounded-2xl hover:border-[#ff003c] transition-all">
+                Annuler
+              </button>
+            )}
+          </div>
+        </form>
+        {editingId && carImages.length > 0 && (
+          <div className="mt-8 space-y-3">
+            <p className="text-[9px] font-black uppercase tracking-widest text-white/40">Images existantes</p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {carImages.map((img) => (
+                <div key={img.id} className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
+                  <img src={img.image_url} alt={img.alt_text || 'Car'} className="h-32 w-full object-cover" />
+                  <div className="p-3 flex items-center justify-between text-[9px] font-black uppercase tracking-widest text-white/40">
+                    <span>{img.is_primary ? 'Principale' : 'Secondaire'}</span>
+                    <button type="button" onClick={() => handleDeleteImage(img.id)} className="text-red-400 hover:text-red-300">Supprimer</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className={`${GLASS} p-10 rounded-[3rem] border-white/5`}>
+        <h3 className="text-xl font-black italic uppercase text-white mb-8">Flotte actuelle</h3>
+        {loading ? (
+          <div className="text-white/40 font-bold">Chargement...</div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {cars.map((car) => {
+              const status = getCarStatusDisplay(car.statut);
+              return (
+                <div key={car.id} className="bg-white/5 border border-white/10 rounded-3xl p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <p className="text-[9px] font-black uppercase tracking-widest text-white/40">{getBrandName(car.brand_id)} • {getCategoryName(car.category_id)}</p>
+                      <p className="text-xl font-black italic text-white">{car.modele}</p>
+                    </div>
+                    <span className={`px-3 py-1 rounded-xl border text-[9px] font-black uppercase tracking-widest ${status.style}`}>{status.label}</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4 text-[10px] font-bold text-white/40 uppercase tracking-widest">
+                    <span>{car.transmission || '—'}</span>
+                    <span>{car.nombre_places || '—'} places</span>
+                    <span>{car.nombre_portes || '—'} portes</span>
+                    <span className="text-white">{formatPrice(car.prix_par_jour)} MAD</span>
+                  </div>
+                  <div className="flex flex-wrap gap-3 mt-6">
+                    <button type="button" onClick={() => handleEdit(car.id)} className="px-4 py-2 bg-white/5 border border-white/10 text-[9px] font-black uppercase tracking-widest rounded-2xl hover:border-[#ff003c] transition-all">
+                      Modifier
+                    </button>
+                    <button type="button" onClick={() => handleDelete(car.id)} className="px-4 py-2 bg-red-500/10 border border-red-500/30 text-red-400 text-[9px] font-black uppercase tracking-widest rounded-2xl hover:bg-red-500/20 transition-all">
+                      Supprimer
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function AdminBookings() {
+  const [bookings, setBookings] = useState([]);
+  const [statuses, setStatuses] = useState(['EN_ATTENTE', 'EN_COURS', 'TERMINE', 'ANNULE']);
+  const [loading, setLoading] = useState(true);
+  const [updatingId, setUpdatingId] = useState(null);
+
+  const loadBookings = async () => {
+    setLoading(true);
+    const result = await adminService.listBookings({ page: 1, pageSize: 30, sortBy: 'date_creation', sortOrder: 'desc' });
+    if (result.success) {
+      setBookings(result.bookings || []);
+    }
+    setLoading(false);
+  };
+
+  const loadStatuses = async () => {
+    const result = await adminService.listBookingStatuses({ page: 1, pageSize: 50 });
+    if (result.success) {
+      const names = result.statuses.map((status) => status.name).filter(Boolean);
+      if (names.length) setStatuses(names);
+    }
+  };
+
+  useEffect(() => {
+    loadBookings();
+    loadStatuses();
+  }, []);
+
+  const syncCarStatus = async (booking, newStatus) => {
+    const carId = booking.car?.id || booking.car_id;
+    if (!carId) return;
+    if (newStatus === 'EN_COURS') {
+      await adminService.updateCar(carId, { statut: 'LOUE' });
+      return;
+    }
+    if (newStatus === 'TERMINE' || newStatus === 'ANNULE') {
+      await adminService.updateCar(carId, { statut: 'DISPONIBLE' });
+    }
+  };
+
+  const handleStatusChange = async (booking, newStatus) => {
+    setUpdatingId(booking.id);
+    const result = await adminService.updateBookingStatus(booking.id, { status: newStatus });
+    if (result.success) {
+      await syncCarStatus(booking, newStatus);
+      setBookings((prev) => prev.map((item) => item.id === booking.id ? { ...item, status: result.booking?.status || { name: newStatus }, status_name: newStatus } : item));
+    }
+    setUpdatingId(null);
+  };
+
+  return (
+    <div className={`${GLASS} p-10 rounded-[3rem] border-white/5`}>
+      <h3 className="text-xl font-black italic uppercase text-white mb-8 flex items-center gap-3">
+        <Calendar className="text-[#ff003c]" /> Réservations
+      </h3>
+      {loading ? (
+        <div className="text-white/40 font-bold">Chargement...</div>
+      ) : (
+        <div className="space-y-6">
+          {bookings.map((booking) => {
+            const statusName = booking.status?.name || booking.status_name;
+            const status = getBookingStatusDisplay(statusName);
+            return (
+              <div key={booking.id} className="bg-white/5 border border-white/10 rounded-3xl p-6">
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                  <div>
+                    <p className="text-[9px] font-black uppercase tracking-widest text-white/40">Réservation #{booking.id}</p>
+                    <p className="text-lg font-black italic text-white">{booking.car?.brand?.name || '—'} {booking.car?.modele || ''}</p>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-white/40 mt-2">
+                      {booking.user?.prenom || 'Client'} {booking.user?.nom || ''}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <span className={`px-4 py-2 rounded-2xl border text-[9px] font-black uppercase tracking-widest ${status.style}`}>{status.label}</span>
+                    <select
+                      value={statusName || ''}
+                      onChange={(e) => handleStatusChange(booking, e.target.value)}
+                      disabled={updatingId === booking.id}
+                      className="bg-white/5 border border-white/10 px-4 py-2 rounded-2xl text-[9px] font-black uppercase tracking-widest outline-none"
+                    >
+                      {statuses.map((statusOption) => (
+                        <option key={statusOption} value={statusOption}>{statusOption}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-6 text-[10px] font-bold text-white/40 uppercase tracking-widest">
+                  <span>Début: <span className="text-white">{formatDateForDisplay(booking.date_debut)}</span></span>
+                  <span>Fin: <span className="text-white">{formatDateForDisplay(booking.date_fin)}</span></span>
+                  <span>Prix: <span className="text-white">{formatPrice(booking.prix_total)} MAD</span></span>
+                  <span>Paiement: <span className="text-white">{booking.paiement_effectue ? 'OK' : 'EN ATTENTE'}</span></span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AdminDashboard() {
+  const { user } = useAuth();
+  const [activeTab, setActiveTab] = useState('dashboard');
+
+  return (
+    <div className="pt-32 pb-40 px-6 max-w-7xl mx-auto min-h-[90vh]">
+      <SectionTitle subtitle="Control_Room" title="ADMIN CONSOLE" />
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        <div className={`${GLASS} p-8 rounded-[3rem] border-white/5 lg:col-span-3 h-fit`}>
+          <div className="mb-8">
+            <p className="text-[9px] font-black uppercase tracking-widest text-white/40">Connecté en tant que</p>
+            <p className="text-lg font-black italic text-white">{user?.prenom} {user?.nom}</p>
+            <p className="text-[10px] font-black uppercase tracking-widest text-[#ff003c]">{user?.role}</p>
+          </div>
+          <div className="space-y-4">
+            <button onClick={() => setActiveTab('dashboard')} className={`w-full text-left px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest border transition-all ${activeTab === 'dashboard' ? 'bg-[#ff003c]/10 border-[#ff003c]/30 text-[#ff003c]' : 'bg-white/5 border-white/10 text-white/50 hover:border-white/30'}`}>
+              Dashboard
+            </button>
+            <button onClick={() => setActiveTab('cars')} className={`w-full text-left px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest border transition-all ${activeTab === 'cars' ? 'bg-[#ff003c]/10 border-[#ff003c]/30 text-[#ff003c]' : 'bg-white/5 border-white/10 text-white/50 hover:border-white/30'}`}>
+              Voitures
+            </button>
+            <button onClick={() => setActiveTab('bookings')} className={`w-full text-left px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest border transition-all ${activeTab === 'bookings' ? 'bg-[#ff003c]/10 border-[#ff003c]/30 text-[#ff003c]' : 'bg-white/5 border-white/10 text-white/50 hover:border-white/30'}`}>
+              Réservations
+            </button>
+          </div>
+        </div>
+        <div className="lg:col-span-9 space-y-8">
+          {activeTab === 'dashboard' && <AdminOverview />}
+          {activeTab === 'cars' && <AdminCars />}
+          {activeTab === 'bookings' && <AdminBookings />}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AppContent() {
   const { user, logout } = useAuth();
   const [currentView, setCurrentView] = useState('home');
@@ -1533,6 +2359,15 @@ function AppContent() {
   useEffect(() => {
     fetchCategories();
   }, []);
+
+  useEffect(() => {
+    if (currentView === 'admin' && user?.role !== 'ADMIN') {
+      setCurrentView('home');
+      if (!user) {
+        setAuthOpen(true);
+      }
+    }
+  }, [currentView, user]);
 
   const fetchCategories = async () => {
     const result = await carService.getCategories();
@@ -1577,6 +2412,8 @@ function AppContent() {
       {currentView === 'search-results' && searchParams && <SearchResultsPage searchParams={searchParams} onBookCar={handleBookCar} />}
       {currentView === 'bookings' && user && <BookingsPage setView={setCurrentView} onViewDetail={handleViewBookingDetail} />}
       {currentView === 'profile' && user && <UserProfile />}
+      {currentView === 'about' && <AboutPage setView={setCurrentView} />}
+      {currentView === 'admin' && user?.role === 'ADMIN' && <AdminDashboard />}
       {currentView === 'booking-detail' && selectedBookingId && (
         <BookingDetailPage 
           bookingId={selectedBookingId} 

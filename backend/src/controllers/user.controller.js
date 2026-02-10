@@ -22,14 +22,21 @@ const getProfile = asyncHandler(async (req, res) => {
 
 // Update user profile
 const updateProfile = asyncHandler(async (req, res) => {
-  const { nom, prenom, telephone } = req.body;
+  const { nom, prenom, telephone, adresse, permis_conduire, cin, date_naissance, date_obtention_permis, certifie_age_21, certifie_permis_2ans } = req.body;
 
   const user = await prisma.user.update({
     where: { id: req.user.id },
     data: {
       ...(nom && { nom }),
       ...(prenom && { prenom }),
-      ...(telephone && { telephone })
+      ...(telephone && { telephone }),
+      ...(adresse && { adresse }),
+      ...(permis_conduire && { permis_conduire }),
+      ...(cin && { cin }),
+      ...(date_naissance && { date_naissance: new Date(date_naissance) }),
+      ...(date_obtention_permis && { date_obtention_permis: new Date(date_obtention_permis) }),
+      ...(certifie_age_21 !== undefined && { certifie_age_21 }),
+      ...(certifie_permis_2ans !== undefined && { certifie_permis_2ans })
     },
     select: {
       id: true,
@@ -37,9 +44,16 @@ const updateProfile = asyncHandler(async (req, res) => {
       nom: true,
       prenom: true,
       telephone: true,
+      adresse: true,
       role: true,
       email_verified: true,
       phone_verified: true,
+      permis_conduire: true,
+      cin: true,
+      date_naissance: true,
+      date_obtention_permis: true,
+      certifie_age_21: true,
+      certifie_permis_2ans: true,
       date_creation: true
     }
   });

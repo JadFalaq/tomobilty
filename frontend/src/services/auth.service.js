@@ -14,6 +14,20 @@ export const authService = {
       });
       
       if (response.data.success) {
+        return { success: true, message: response.data.message };
+      }
+      
+      return { success: false, error: response.data };
+    } catch (error) {
+      return { success: false, error: handleApiError(error) };
+    }
+  },
+
+  async verifyEmail(email, code) {
+    try {
+      const response = await apiClient.post('/auth/verify-email', { email, code });
+      
+      if (response.data.success) {
         const { user, tokens } = response.data.data;
         localStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, tokens.access);
         localStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, tokens.refresh);
@@ -100,10 +114,19 @@ export const authService = {
     }
   },
 
-  async verifyEmail(token) {
+  async googleAuth(token) {
     try {
-      const response = await apiClient.post('/auth/verify-email', { token });
-      return { success: response.data.success, message: response.data.message };
+      const response = await apiClient.post('/auth/google', { token });
+      
+      if (response.data.success) {
+        const { user, tokens } = response.data.data;
+        localStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, tokens.access);
+        localStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, tokens.refresh);
+        localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(user));
+        return { success: true, user, tokens };
+      }
+      
+      return { success: false, error: response.data };
     } catch (error) {
       return { success: false, error: handleApiError(error) };
     }
@@ -113,22 +136,6 @@ export const authService = {
     try {
       const response = await apiClient.post('/auth/resend-verification', { email });
       return { success: response.data.success, message: response.data.message };
-    } catch (error) {
-      return { success: false, error: handleApiError(error) };
-    }
-  },
-
-  async googleAuth(token) {
-    try {
-      const response = await apiClient.post('/auth/google', { token });
-      if (response.data.success) {
-        const { user, tokens } = response.data.data;
-        localStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, tokens.access);
-        localStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, tokens.refresh);
-        localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(user));
-        return { success: true, user, tokens };
-      }
-      return { success: false, error: response.data };
     } catch (error) {
       return { success: false, error: handleApiError(error) };
     }

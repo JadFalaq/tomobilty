@@ -49,6 +49,12 @@ export const AuthProvider = ({ children }) => {
 
   const register = async (data) => {
     const result = await authService.register(data);
+    // Don't set user/isAuthenticated here, wait for verification
+    return result;
+  };
+
+  const verifyEmail = async (email, code) => {
+    const result = await authService.verifyEmail(email, code);
     if (result.success) {
       setUser(result.user);
       setIsAuthenticated(true);
@@ -70,6 +76,15 @@ export const AuthProvider = ({ children }) => {
     return result;
   };
 
+  const googleLogin = async (token) => {
+    const result = await authService.googleAuth(token);
+    if (result.success) {
+      setUser(result.user);
+      setIsAuthenticated(true);
+    }
+    return result;
+  };
+
   const value = {
     user,
     loading,
@@ -78,6 +93,8 @@ export const AuthProvider = ({ children }) => {
     register,
     logout,
     updateProfile,
+    googleLogin,
+    verifyEmail,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

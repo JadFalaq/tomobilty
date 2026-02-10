@@ -13,11 +13,19 @@ model User {
   prenom                     String?            @db.VarChar(100)
   email                      String             @unique @db.VarChar(255)
   telephone                  String?            @db.VarChar(20)
+  adresse                    String?            @db.VarChar(255)
+  cin                        String?            @unique @db.VarChar(20)
+  permis_conduire            String?            @unique @db.VarChar(20)
+  date_naissance             DateTime?          @db.Date
+  date_obtention_permis      DateTime?          @db.Date
+  certifie_age_21            Boolean            @default(false)
+  certifie_permis_2ans       Boolean            @default(false)
   mot_de_passe               String?            @db.VarChar(255)
   role                       Role               @default(CLIENT)
   email_verified             Boolean            @default(false)
   phone_verified             Boolean            @default(false)
   email_verification_token   String?            @db.VarChar(255)
+  email_verification_code    String?            @db.VarChar(6)
   email_verification_expires DateTime?
   date_creation              DateTime           @default(now())
   date_modification          DateTime           @default(now()) @updatedAt
