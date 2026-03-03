@@ -7,7 +7,7 @@
   ],
   "scripts": {
     "dev": "npm run dev --workspace=frontend",
-    "build": "npm run build --workspace=frontend",
+    "build": "npm install --workspace=frontend && npm run build --workspace=frontend",
     "start": "npm run preview --workspace=frontend",
     "lint": "npm --prefix ./frontend run build",
     "api:dev": "npm run prisma:generate && node backend/api/index.js",
@@ -76,7 +76,7 @@
     "supertest": "^7.1.4",
     "tailwindcss": "^3.4.0",
     "typescript": "^5.3.3",
-    "vite": "^7.3.0"
+    "vite": "^5.0.0"
   },
   "jest": {
     "testEnvironment": "node",
@@ -92,5 +92,8 @@
       "!backend/src/**/*.test.js",
       "!tests/**"
     ]
+  },
+  "engines": {
+    "node": "24.x"
   }
 }
