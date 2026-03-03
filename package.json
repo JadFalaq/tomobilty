@@ -2,10 +2,13 @@
   "name": "tommobilty",
   "version": "1.0.0",
   "description": "Plateforme de location de voitures au Maroc",
+  "workspaces": [
+    "frontend"
+  ],
   "scripts": {
-    "dev": "npm --prefix ./frontend run dev",
-    "build": "cd frontend && npm install && npm run build",
-    "start": "npm --prefix ./frontend run preview -- --host",
+    "dev": "npm run dev --workspace=frontend",
+    "build": "npm run build --workspace=frontend",
+    "start": "npm run preview --workspace=frontend",
     "lint": "npm --prefix ./frontend run build",
     "api:dev": "npm run prisma:generate && node backend/api/index.js",
     "api:start": "npm run prisma:generate && node backend/api/index.js",
