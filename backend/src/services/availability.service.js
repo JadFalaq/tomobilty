@@ -175,10 +175,6 @@ const getAvailableCars = async (filters) => {
       whereClause.transmission = transmission;
     }
 
-    if (seats) {
-      whereClause.nombre_places = parseInt(seats);
-    }
-
     if (min_price || max_price) {
       whereClause.prix_par_jour = {};
       if (min_price) {
@@ -204,8 +200,6 @@ const getAvailableCars = async (filters) => {
         category_id: true,
         modele: true,
         transmission: true,
-        nombre_places: true,
-        nombre_portes: true,
         prix_par_jour: true,
         statut: true,
         brand: { select: { name: true } },

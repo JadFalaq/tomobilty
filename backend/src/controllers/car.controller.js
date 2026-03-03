@@ -74,8 +74,6 @@ const getCars = asyncHandler(async (req, res) => {
         category_id: true,
         modele: true,
         transmission: true,
-        nombre_places: true,
-        nombre_portes: true,
         prix_par_jour: true,
         statut: true,
         brand: { select: { name: true } },
@@ -153,8 +151,6 @@ const getLeastDemandedCars = asyncHandler(async (req, res) => {
       category_id: true,
       modele: true,
       transmission: true,
-      nombre_places: true,
-      nombre_portes: true,
       prix_par_jour: true,
       statut: true,
       brand: { select: { name: true } },
@@ -210,8 +206,7 @@ const searchCars = asyncHandler(async (req, res) => {
     q,
     date_debut,
     date_fin,
-    prix_max,
-    places_min
+    prix_max
   } = req.query;
 
   const where = {
@@ -253,13 +248,6 @@ const searchCars = asyncHandler(async (req, res) => {
     };
   }
 
-  // Capacity filter
-  if (places_min) {
-    where.nombre_places = {
-      gte: parseInt(places_min)
-    };
-  }
-
   // Availability check via centralized service
   if (date_debut && date_fin) {
     const availableCars = await availabilityService.getAvailableCars({
@@ -270,7 +258,7 @@ const searchCars = asyncHandler(async (req, res) => {
       transmission: undefined,
       min_price: undefined,
       max_price: prix_max,
-      min_seats: places_min ? parseInt(places_min) : undefined
+      min_seats: undefined
     });
     where.id = { in: availableCars.map(c => c.id) };
   }
@@ -283,8 +271,6 @@ const searchCars = asyncHandler(async (req, res) => {
       category_id: true,
       modele: true,
       transmission: true,
-      nombre_places: true,
-      nombre_portes: true,
       prix_par_jour: true,
       statut: true,
       brand: { select: { name: true } },
@@ -357,8 +343,6 @@ const getCarById = asyncHandler(async (req, res) => {
     category_id,
     modele,
     transmission,
-    nombre_places,
-    nombre_portes,
     prix_par_jour,
     statut,
     brand,
@@ -375,8 +359,6 @@ const getCarById = asyncHandler(async (req, res) => {
         category_id,
         modele,
         transmission,
-        nombre_places,
-        nombre_portes,
         prix_par_jour,
         statut,
         brand,
@@ -492,7 +474,6 @@ const getAvailableCars = asyncHandler(async (req, res) => {
     const q = req.query;
     delete q.location;
     const fuel = q.fuel || q.fuel_type;
-    const seats = q.seats;
     const cars = await availabilityService.getAvailableCars({
       date_debut: startISO,
       date_fin: endISO,
@@ -501,7 +482,6 @@ const getAvailableCars = asyncHandler(async (req, res) => {
       transmission: q.transmission,
       min_price: q.min_price,
       max_price: q.max_price,
-      seats,
       fuel
     });
     res.json({ success: true, data: { cars, total: cars.length } });
@@ -518,8 +498,6 @@ const createCar = asyncHandler(async (req, res) => {
     category_id,
     modele,
     transmission,
-    nombre_places,
-    nombre_portes,
     prix_par_jour,
     statut
   } = req.body;
@@ -530,8 +508,6 @@ const createCar = asyncHandler(async (req, res) => {
       category_id: parseInt(category_id),
       modele,
       transmission,
-      nombre_places: nombre_places ? parseInt(nombre_places) : null,
-      nombre_portes: nombre_portes ? parseInt(nombre_portes) : null,
       prix_par_jour: parseFloat(prix_par_jour),
       statut: statut || 'DISPONIBLE'
     },
@@ -541,8 +517,6 @@ const createCar = asyncHandler(async (req, res) => {
       category_id: true,
       modele: true,
       transmission: true,
-      nombre_places: true,
-      nombre_portes: true,
       prix_par_jour: true,
       statut: true
     }
@@ -563,8 +537,6 @@ const updateCar = asyncHandler(async (req, res) => {
   // Convert string numbers to integers/floats
   if (updateData.brand_id) updateData.brand_id = parseInt(updateData.brand_id);
   if (updateData.category_id) updateData.category_id = parseInt(updateData.category_id);
-  if (updateData.nombre_places) updateData.nombre_places = parseInt(updateData.nombre_places);
-  if (updateData.nombre_portes) updateData.nombre_portes = parseInt(updateData.nombre_portes);
   if (updateData.prix_par_jour) updateData.prix_par_jour = parseFloat(updateData.prix_par_jour);
 
   const car = await prisma.car.update({
@@ -576,8 +548,6 @@ const updateCar = asyncHandler(async (req, res) => {
       category_id: true,
       modele: true,
       transmission: true,
-      nombre_places: true,
-      nombre_portes: true,
       prix_par_jour: true,
       statut: true
     }

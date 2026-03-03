@@ -205,15 +205,7 @@ function BookingDetailPage({ bookingId, onBack, onCancel }) {
                   </h4>
                   <p className="text-xl font-bold text-white/60 mb-6">{booking.vehicle?.modele || booking.car?.modele || 'Modèle'}</p>
                   
-                  <div className="grid grid-cols-3 gap-4">
-                    <div>
-                      <p className="text-[8px] font-black text-white/40 uppercase tracking-widest mb-1">Places</p>
-                      <p className="text-white font-bold">{booking.vehicle?.nombre_places || booking.car?.nombre_places || '-'}</p>
-                    </div>
-                    <div>
-                      <p className="text-[8px] font-black text-white/40 uppercase tracking-widest mb-1">Portes</p>
-                      <p className="text-white font-bold">{booking.vehicle?.nombre_portes || booking.car?.nombre_portes || '-'}</p>
-                    </div>
+                  <div className="grid grid-cols-1 gap-4">
                     <div>
                       <p className="text-[8px] font-black text-white/40 uppercase tracking-widest mb-1">Trans.</p>
                       <p className="text-white font-bold text-xs">{(booking.vehicle?.transmission || booking.car?.transmission)?.substring(0, 4) || '-'}</p>

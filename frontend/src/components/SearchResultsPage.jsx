@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { FaCheck as Check, FaTimes as X } from 'react-icons/fa';
 import { carService } from '../services/car.service';
 import { formatPrice } from '../utils/dateUtils';
+import { getImageUrl } from '../utils/apiClient';
 import ReservationFlow from './ReservationFlow';
 
 const GLASS = "bg-black/60 backdrop-blur-xl border border-white/10";
@@ -130,9 +131,14 @@ function SearchResultsPage({ searchParams, onBookCar }) {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
           {cars.map((car) => {
-            const imageUrl = car.images && car.images.length > 0 
-              ? (typeof car.images[0] === 'string' ? car.images[0] : car.images[0]?.image_url)
-              : 'https://images.unsplash.com/photo-1494976388531-d1058494cdd8?q=80&w=800';
+            const imageUrl =
+              (car.primaryImage && car.primaryImage.image_url) ||
+              (Array.isArray(car.images) && car.images.length > 0
+                ? (car.images.find((img) => img.is_primary)?.image_url ||
+                   (typeof car.images[0] === 'string' ? car.images[0] : car.images[0]?.image_url))
+                : null);
+            
+            const finalImageUrl = getImageUrl(imageUrl);
             
             const dailyPrice = car.pricing?.daily_price || car.prix_par_jour;
             const totalPrice = car.pricing?.total_price || (dailyPrice * rentalDays);
@@ -142,14 +148,10 @@ function SearchResultsPage({ searchParams, onBookCar }) {
                 key={car.id}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="group bg-[#0a0a0a] rounded-[3rem] border border-white/5 overflow-hidden transition-all hover:border-[#ff003c]/30 hover:shadow-2xl"
+                className="group bg-[#0a0a0a] rounded-[3rem] border border-white/5 overflow-hidden transition-all hover:border-[#ff003c]/30"
               >
                 <div className="h-72 overflow-hidden relative">
-                  <img 
-                    src={imageUrl} 
-                    className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-1000 group-hover:scale-110" 
-                    alt={car.modele} 
-                  />
+                  <img src={finalImageUrl} className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-1000 group-hover:scale-110" alt={car.modele} />
                   <div className="absolute top-6 left-6 bg-black/80 backdrop-blur-md px-4 py-2 rounded-full border border-white/10">
                     <span className="text-[10px] font-black text-white uppercase italic tracking-tighter">
                       {formatPrice(dailyPrice)} MAD / JOUR
@@ -173,15 +175,7 @@ function SearchResultsPage({ searchParams, onBookCar }) {
                     {car.modele}
                   </h3>
                   
-                  <div className="grid grid-cols-3 gap-4 mb-6 pb-6 border-b border-white/10">
-                    <div className="text-center">
-                      <p className="text-[8px] font-black text-white/40 uppercase tracking-widest mb-1">Places</p>
-                      <p className="text-white font-bold">{car.nombre_places || '-'}</p>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-[8px] font-black text-white/40 uppercase tracking-widest mb-1">Portes</p>
-                      <p className="text-white font-bold">{car.nombre_portes || '-'}</p>
-                    </div>
+                  <div className="grid grid-cols-1 gap-4 mb-6 pb-6 border-b border-white/10">
                     <div className="text-center">
                       <p className="text-[8px] font-black text-white/40 uppercase tracking-widest mb-1">Trans.</p>
                       <p className="text-white font-bold text-xs">{car.transmission?.substring(0, 4) || '-'}</p>

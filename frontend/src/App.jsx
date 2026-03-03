@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence, useScroll, useTransform, useSpring } from 'framer-motion';
+import bookingService from './services/booking.service';
 import { 
   FaCar as Car,
   FaMapMarkerAlt as MapPin,
@@ -341,7 +342,7 @@ function HomeView({ setView, setSelectedCat }) {
 }
 
 function CarsPage({ selectedCat, setSelectedCat, setView }) {
-  const [filters, setFilters] = useState({ transmission: 'Tous', minPrice: 0, maxPrice: 5000, seats: 'Tous', fuel: 'Tous' });
+  const [filters, setFilters] = useState({ transmission: 'Tous', minPrice: 0, maxPrice: 5000, fuel: 'Tous' });
   const [bookingCar, setBookingCar] = useState(null);
   const [checkResult, setCheckResult] = useState(null);
   const carSectionRef = useRef(null);
@@ -351,9 +352,8 @@ function CarsPage({ selectedCat, setSelectedCat, setView }) {
       const matchCat = selectedCat ? car.categoryId === selectedCat : true;
       const matchTrans = filters.transmission === 'Tous' ? true : car.transmission === filters.transmission;
       const matchPrice = car.prix_par_jour >= filters.minPrice && car.prix_par_jour <= filters.maxPrice;
-      const matchSeats = filters.seats === 'Tous' ? true : car.nombre_places === parseInt(filters.seats);
       const matchFuel = filters.fuel === 'Tous' ? true : car.variantes[0].type_carburant === filters.fuel;
-      return matchCat && matchTrans && matchPrice && matchSeats && matchFuel;
+      return matchCat && matchTrans && matchPrice && matchFuel;
     });
   }, [selectedCat, filters]);
 
@@ -389,17 +389,13 @@ function CarsPage({ selectedCat, setSelectedCat, setView }) {
                      <option value="Tous">Tous</option><option value="Automatique">Automatique</option><option value="Manuelle">Manuelle</option>
                    </select>
                  </div>
-                 <div className="space-y-2"><label className="text-[9px] font-black text-[#ff003c] uppercase tracking-widest block">Places</label>
-                   <select value={filters.seats} onChange={(e) => setFilters({...filters, seats: e.target.value})} className="bg-white/5 border border-white/10 p-2 rounded-lg text-xs font-bold w-full outline-none cursor-pointer">
-                     <option value="Tous">Tous</option><option value="2">2 Places</option><option value="4">4 Places</option><option value="5">5 Places</option>
-                   </select>
-                 </div>
+                
                  <div className="space-y-2"><label className="text-[9px] font-black text-[#ff003c] uppercase tracking-widest block">Carburant</label>
                    <select value={filters.fuel} onChange={(e) => setFilters({...filters, fuel: e.target.value})} className="bg-white/5 border border-white/10 p-2 rounded-lg text-xs font-bold w-full outline-none cursor-pointer">
                      <option value="Tous">Tous</option><option value="Essence">Essence</option><option value="Diesel">Diesel</option><option value="Électrique">Électrique</option>
                    </select>
                  </div>
-                 <div className="flex items-end h-full"><button onClick={() => setFilters({ minPrice: 0, maxPrice: 5000, transmission: 'Tous', seats: 'Tous', fuel: 'Tous' })} className="text-[9px] font-black text-white/40 hover:text-[#ff003c] uppercase tracking-[0.2em]">Reset</button></div>
+                 <div className="flex items-end h-full"><button onClick={() => setFilters({ minPrice: 0, maxPrice: 5000, transmission: 'Tous', fuel: 'Tous' })} className="text-[9px] font-black text-white/40 hover:text-[#ff003c] uppercase tracking-[0.2em]">Reset</button></div>
                </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
@@ -457,7 +453,31 @@ function CarsPage({ selectedCat, setSelectedCat, setView }) {
 }
 
 function BookingsPage({ setView }) {
-  const bookings = MOCK_USER_BOOKINGS;
+  const [bookings, setBookings] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const fetchBookings = async () => {
+      try {
+        const result = await bookingService.getMyBookings();
+        if (result.success) {
+          setBookings(result.bookings);
+        } else {
+          console.error("Error fetching bookings:", result.error);
+          setError("Impossible de charger les réservations.");
+        }
+      } catch (err) {
+        console.error("Exception fetching bookings:", err);
+        setError("Erreur de connexion.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchBookings();
+  }, []);
+
   const getStatusDisplay = (status) => {
     switch (status) {
       case 'EN_ATTENTE': return { label: 'EN ATTENTE', style: 'text-yellow-400 border-yellow-400/30 bg-yellow-400/5', icon: <Clock size={12}/> };
@@ -473,17 +493,44 @@ function BookingsPage({ setView }) {
     console.log("Demande de téléchargement de la facture...");
   };
 
+  if (loading) {
+    return (
+      <div className="pt-40 pb-40 px-6 max-w-7xl mx-auto min-h-[90vh] flex items-center justify-center">
+        <div className="text-[#ff003c] animate-pulse font-black uppercase tracking-widest">Chargement des missions...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="pt-40 pb-40 px-6 max-w-7xl mx-auto min-h-[90vh] flex flex-col items-center justify-center gap-4">
+        <div className="text-red-500 font-bold">{error}</div>
+        <button onClick={() => window.location.reload()} className="px-6 py-2 bg-white/10 rounded-xl hover:bg-white/20 transition">Réessayer</button>
+      </div>
+    );
+  }
+
   return (
     <div className="pt-40 pb-40 px-6 max-w-7xl mx-auto min-h-[90vh]">
       <SectionTitle subtitle="Protocol_Archives" title="MES RÉSERVATIONS" />
       <div className="grid gap-10">
-        {bookings.map((book) => {
-          const status = getStatusDisplay(book.status_name);
-          const car = book.varianteCar.car;
+        {bookings.length === 0 ? (
+          <div className="text-white/30 text-center py-20 font-black uppercase italic tracking-widest border border-white/5 rounded-[3rem] bg-white/5">
+            Aucune mission trouvée
+          </div>
+        ) : (
+          bookings.map((book) => {
+          const status = getStatusDisplay(book.status?.name || book.status_name);
+          // Backend provides car directly in the booking object
+          const car = book.car;
+          if (!car) return null;
+
           return (
             <motion.div key={book.id} whileHover={{ y: -5 }} className={`${GLASS} rounded-[3.5rem] border border-white/5 flex flex-col md:flex-row overflow-hidden group transition-all duration-500`}>
               <div className="w-full md:w-64 h-64 md:h-auto overflow-hidden border-r border-white/5 relative">
-                <img src={car.images[0].image_url} className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-1000" alt="Car" />
+                {(car.primaryImage?.image_url || car.images?.[0]?.image_url || car.images?.[0]) && (
+                  <img src={car.primaryImage?.image_url || car.images?.[0]?.image_url || car.images?.[0]} className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-1000" alt="Car" />
+                )}
                 <div className="absolute top-6 left-6">
                   <div className={`px-4 py-1.5 border rounded-full text-[9px] font-black uppercase flex items-center gap-2 backdrop-blur-md ${status.style}`}>
                     {status.icon} {status.label}
@@ -494,7 +541,7 @@ function BookingsPage({ setView }) {
                 <div className="flex flex-col md:flex-row justify-between gap-6">
                   <div>
                     <p className="text-[9px] font-black text-[#ff003c] uppercase mb-2 italic">#{book.id}_MISSION</p>
-                    <h4 className="text-3xl font-black italic uppercase text-white mb-4 tracking-tighter text-left">{car.brand.name} {car.modele}</h4>
+                    <h4 className="text-3xl font-black italic uppercase text-white mb-4 tracking-tighter text-left">{car.brand?.name} {car.modele}</h4>
                     <div className="flex gap-8 text-[10px] font-bold text-white/40 uppercase tracking-widest text-left">
                        <div className="flex items-center gap-2 text-left"><MapPin size={14} className="text-[#ff003c]"/> {book.lieu_prise_en_charge}</div>
                        <div className="flex items-center gap-2 text-left"><Calendar size={14}/> {formatDate(book.date_debut)} — {formatDate(book.date_fin)}</div>
@@ -506,7 +553,7 @@ function BookingsPage({ setView }) {
                   </div>
                 </div>
                 <div className="mt-10 pt-6 border-t border-white/5 flex gap-4">
-                  {book.invoices.length > 0 ? (
+                  {book.invoices && book.invoices.length > 0 ? (
                     <button onClick={() => downloadInvoice(book.invoices[0].id)} className="flex-1 py-4 bg-white text-black font-black uppercase italic rounded-2xl hover:bg-[#ff003c] hover:text-white transition-all text-[11px] flex items-center justify-center gap-2 shadow-lg"><Download size={16}/> Télécharger Facture</button>
                   ) : (
                     <div className="flex-1 py-4 bg-white/5 border border-white/10 text-white/20 font-black uppercase italic rounded-2xl text-[10px] flex items-center justify-center gap-2 cursor-not-allowed"><FileText size={16}/> En attente de paiement</div>
@@ -516,7 +563,8 @@ function BookingsPage({ setView }) {
               </div>
             </motion.div>
           );
-        })}
+        })
+        )}
       </div>
     </div>
   );

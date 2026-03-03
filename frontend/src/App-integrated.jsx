@@ -18,6 +18,7 @@ import { protectionService } from './services/protection.service';
 import { pickupSiteService } from './services/pickupsite.service';
 import { loyaltyService } from './services/loyalty.service';
 import { adminService } from './services/admin.service';
+import { getImageUrl } from './utils/apiClient';
 import { formatDateForAPI, formatDateForDisplay, formatPrice } from './utils/dateUtils';
 import CustomCalendar from './components/CustomCalendar';
 import SearchResultsPage from './components/SearchResultsPage';
@@ -35,20 +36,13 @@ const GLOW_RED = "shadow-[0_0_20px_rgba(255,0,60,0.4)]";
 const GLASS = "bg-black/60 backdrop-blur-xl border border-white/10";
 const LOGO_SRC = "/uploads/WhatsApp_Image_2025-12-26_at_17.23.03-removebg-preview.png";
 
-const INITIAL_FILTERS = { transmission: 'Tous', minPrice: 0, maxPrice: 5000, seats: 'Tous', fuel: 'Tous' };
+const INITIAL_FILTERS = { transmission: 'Tous', minPrice: 0, maxPrice: 5000, fuel: 'Tous' };
 const INITIAL_PENDING_FILTERS = { ...INITIAL_FILTERS };
 
 const TRANSMISSION_OPTIONS = [
   { id: 'Tous', nom: 'Tous' },
   { id: 'Automatique', nom: 'Automatique' },
   { id: 'Manuelle', nom: 'Manuelle' },
-];
-
-const SEAT_OPTIONS = [
-  { id: 'Tous', nom: 'Tous' },
-  { id: '2', nom: '2 Places' },
-  { id: '4', nom: '4 Places' },
-  { id: '5', nom: '5 Places' },
 ];
 
 const sanitizeText = (value) => {
@@ -724,7 +718,7 @@ function AuthPortal({ isOpen, onClose }) {
   return (
     <AnimatePresence>
       {isOpen && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[200] flex items-center justify-center px-6 bg-black/98 backdrop-blur-3xl">
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[200] flex items-center justify-center px-6 py-10 bg-black/98 backdrop-blur-3xl overflow-y-auto">
           <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="max-w-4xl w-full bg-[#050505] border border-white/5 rounded-[4rem] overflow-hidden relative shadow-2xl grid md:grid-cols-2">
             <button onClick={onClose} className="absolute top-8 right-8 text-white/20 hover:text-[#ff003c] z-30 transition-colors">
               <X size={24} />
@@ -765,7 +759,7 @@ function AuthPortal({ isOpen, onClose }) {
             <div className="p-12 md:p-16 flex flex-col justify-center text-center">
               <form onSubmit={handleAuthSubmit} className="space-y-6">
                 {error && (
-                  <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-2xl text-red-500 text-sm font-bold">
+                  <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-2xl text-red-500 text-xs font-bold max-h-32 overflow-y-auto leading-snug break-words">
                     {error}
                   </div>
                 )}
@@ -975,6 +969,72 @@ function LocationDropdown({ label, icon: Icon, value, onChange, sites, disabled 
                 </button>
               ))
             )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function AdminSelect({ label, value, onChange, options }) {
+  const [open, setOpen] = useState(false);
+  const dropdownRef = useRef(null);
+  const selectedOption = options.find((option) => String(option.value) === String(value));
+  const displayLabel = selectedOption ? selectedOption.label : options[0]?.label || 'Sélectionner';
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  return (
+    <div ref={dropdownRef} className="space-y-2 relative">
+      <label className="text-[9px] font-black uppercase tracking-widest text-white/40">{label}</label>
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="w-full bg-white/5 border border-white/10 px-4 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest text-white/80 outline-none hover:border-[#ff003c] hover:text-white flex items-center justify-between cursor-pointer"
+      >
+        <span className="truncate">{displayLabel}</span>
+        <ChevronRight
+          size={12}
+          className={`text-white/40 transition-transform ${open ? 'rotate-90' : ''}`}
+        />
+      </button>
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 6 }}
+            className="absolute top-full left-0 right-0 mt-2 bg-black border border-white/10 rounded-2xl shadow-2xl z-[999] max-h-60 overflow-y-auto"
+          >
+            {options.map((option) => (
+              <button
+                key={String(option.value)}
+                type="button"
+                onClick={() => {
+                  onChange(option.value);
+                  setOpen(false);
+                }}
+                className={`w-full px-4 py-3 text-left text-xs font-bold transition-colors ${
+                  String(option.value) === String(value)
+                    ? 'bg-[#ff003c]/20 text-[#ff003c]'
+                    : 'text-white hover:bg-white/5'
+                }`}
+              >
+                <span className="truncate">{option.label}</span>
+              </button>
+            ))}
           </motion.div>
         )}
       </AnimatePresence>
@@ -1259,10 +1319,31 @@ function CarsPage({ selectedCat, setSelectedCat, setView, categories }) {
   const [bookingDates, setBookingDates] = useState({ startDate: '', endDate: '' });
   const [checkResult, setCheckResult] = useState(null);
   const carSectionRef = useRef(null);
+  const startCalendarRef = useRef(null);
+  const endCalendarRef = useRef(null);
+  const [showStartCalendar, setShowStartCalendar] = useState(false);
+  const [showEndCalendar, setShowEndCalendar] = useState(false);
 
   useEffect(() => {
     fetchCars();
   }, [selectedCat]);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (startCalendarRef.current && !startCalendarRef.current.contains(event.target)) {
+        setShowStartCalendar(false);
+      }
+      if (endCalendarRef.current && !endCalendarRef.current.contains(event.target)) {
+        setShowEndCalendar(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   const fetchCars = async () => {
     setLoading(true);
@@ -1283,8 +1364,7 @@ function CarsPage({ selectedCat, setSelectedCat, setView, categories }) {
     return cars.filter(car => {
       const matchTrans = filters.transmission === 'Tous' ? true : car.transmission === filters.transmission;
       const matchPrice = car.prix_par_jour >= minPrice && car.prix_par_jour <= maxPrice;
-      const matchSeats = filters.seats === 'Tous' ? true : car.nombre_places === parseInt(filters.seats);
-      return matchTrans && matchPrice && matchSeats;
+      return matchTrans && matchPrice;
     });
   }, [cars, filters]);
 
@@ -1315,7 +1395,6 @@ function CarsPage({ selectedCat, setSelectedCat, setView, categories }) {
     setFilters(prev => ({
       ...prev,
       transmission: pendingFilters.transmission,
-      seats: pendingFilters.seats,
       minPrice: pendingFilters.minPrice === '' ? 0 : pendingFilters.minPrice,
       maxPrice: pendingFilters.maxPrice === '' ? '' : pendingFilters.maxPrice
     }));
@@ -1422,14 +1501,6 @@ function CarsPage({ selectedCat, setSelectedCat, setView, categories }) {
                   sites={TRANSMISSION_OPTIONS}
                   disabled={false}
                 />
-                <LocationDropdown
-                  label="Places"
-                  icon={User}
-                  value={pendingFilters.seats}
-                  onChange={(val) => handleSelectChange('seats', val)}
-                  sites={SEAT_OPTIONS}
-                  disabled={false}
-                />
                 <div className="flex items-end h-full justify-end gap-4">
                   <button
                     onClick={resetFilters}
@@ -1454,14 +1525,19 @@ function CarsPage({ selectedCat, setSelectedCat, setView, categories }) {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
                 {filteredCars.map((car) => {
-                  const imageUrl = car.images && car.images.length > 0 
-                    ? (typeof car.images[0] === 'string' ? car.images[0] : car.images[0]?.image_url)
-                    : 'https://images.unsplash.com/photo-1494976388531-d1058494cdd8?q=80&w=800';
+                  const imageUrl =
+                    (car.primaryImage && car.primaryImage.image_url) ||
+                    (Array.isArray(car.images) && car.images.length > 0
+                      ? (car.images.find((img) => img.is_primary)?.image_url ||
+                         (typeof car.images[0] === 'string' ? car.images[0] : car.images[0]?.image_url))
+                      : null);
+                  
+                  const finalImageUrl = getImageUrl(imageUrl);
                   
                   return (
                     <div key={car.id} className="group bg-[#0a0a0a] rounded-[3rem] border border-white/5 overflow-hidden transition-all hover:border-[#ff003c]/30">
                       <div className="h-72 overflow-hidden relative">
-                        <img src={imageUrl} className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-1000 group-hover:scale-110" alt={car.modele} />
+                        <img src={finalImageUrl} className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-1000 group-hover:scale-110" alt={car.modele} />
                         <div className="absolute top-6 left-6 bg-black/80 backdrop-blur-md px-3 py-1 rounded-full border border-white/10">
                           <span className="text-[9px] font-black text-white uppercase italic tracking-tighter">{formatPrice(car.prix_par_jour)} MAD / J</span>
                         </div>
@@ -1483,28 +1559,88 @@ function CarsPage({ selectedCat, setSelectedCat, setView, categories }) {
       <AnimatePresence>
         {bookingCar && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[200] flex items-center justify-center px-6 bg-black/95 backdrop-blur-3xl">
-            <motion.div initial={{ scale: 0.9, y: 50 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 50 }} className="max-w-4xl w-full bg-[#111] border border-white/10 rounded-[3.5rem] p-10 md:p-16 relative overflow-hidden shadow-2xl text-left">
+            <motion.div initial={{ scale: 0.9, y: 50 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 50 }} className="max-w-4xl w-full bg-[#111] border border-white/10 rounded-[3.5rem] p-10 md:p-16 relative overflow-visible shadow-2xl text-left">
               <button onClick={() => {setBookingCar(null); setCheckResult(null);}} className="absolute top-10 right-10 text-white hover:text-[#ff003c] transition-colors"><X size={32} /></button>
               <div className="relative z-10">
                 <h2 className="text-4xl md:text-6xl font-black italic uppercase text-white mb-10 tracking-tighter">{bookingCar.brand?.name} <span className="text-transparent stroke-text">{bookingCar.modele}</span></h2>
                 <div className="grid md:grid-cols-2 gap-8 mb-12">
-                  <div className="space-y-3">
+                  <div ref={startCalendarRef} className="space-y-3">
                     <label className="text-[9px] font-black text-white/30 uppercase tracking-[0.3em] ml-2 italic">Début</label>
-                    <input 
-                      type="date" 
-                      value={bookingDates.startDate}
-                      onChange={(e) => setBookingDates({...bookingDates, startDate: e.target.value})}
-                      className="bg-white/5 w-full p-6 rounded-3xl border border-white/10 text-white outline-none focus:border-[#ff003c] [color-scheme:dark] font-bold" 
-                    />
+                    <div
+                      className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-3xl px-5 py-4 relative hover:border-[#ff003c] transition-colors cursor-pointer"
+                      onClick={() => setShowStartCalendar(!showStartCalendar)}
+                    >
+                      <Calendar size={18} className="text-[#ff003c]" />
+                      <span className="text-sm font-bold text-white">
+                        {bookingDates.startDate
+                          ? new Date(bookingDates.startDate).toLocaleDateString('fr-FR')
+                          : 'Sélectionner...'}
+                      </span>
+                    </div>
+                    <AnimatePresence>
+                      {showStartCalendar && (
+                        <CustomCalendar
+                          value={bookingDates.startDate}
+                          onChange={(date) => {
+                            setBookingDates({ startDate: date, endDate: '' });
+                          }}
+                          onClose={() => setShowStartCalendar(false)}
+                          minDate={(() => {
+                            const tomorrow = new Date();
+                            tomorrow.setDate(tomorrow.getDate() + 1);
+                            return tomorrow.toISOString().split('T')[0];
+                          })()}
+                        />
+                      )}
+                    </AnimatePresence>
                   </div>
-                  <div className="space-y-3">
+                  <div ref={endCalendarRef} className="space-y-3">
                     <label className="text-[9px] font-black text-white/30 uppercase tracking-[0.3em] ml-2 italic">Fin</label>
-                    <input 
-                      type="date" 
-                      value={bookingDates.endDate}
-                      onChange={(e) => setBookingDates({...bookingDates, endDate: e.target.value})}
-                      className="bg-white/5 w-full p-6 rounded-3xl border border-white/10 text-white outline-none focus:border-[#ff003c] [color-scheme:dark] font-bold" 
-                    />
+                    <div
+                      className={`flex items-center gap-3 bg-white/5 border border-white/10 rounded-3xl px-5 py-4 relative transition-colors ${
+                        !bookingDates.startDate ? 'opacity-30 cursor-not-allowed' : 'hover:border-[#ff003c] cursor-pointer'
+                      }`}
+                      onClick={() => {
+                        if (!bookingDates.startDate) return;
+                        setShowEndCalendar(!showEndCalendar);
+                      }}
+                    >
+                      <Calendar size={18} className="text-[#ff003c]" />
+                      <span
+                        className={`text-sm font-bold ${
+                          bookingDates.startDate ? 'text-white' : 'text-white/40'
+                        }`}
+                      >
+                        {bookingDates.endDate
+                          ? new Date(bookingDates.endDate).toLocaleDateString('fr-FR')
+                          : bookingDates.startDate
+                            ? 'Sélectionner...'
+                            : 'Choisir la date de début d\'abord'}
+                      </span>
+                    </div>
+                    <AnimatePresence>
+                      {showEndCalendar && (
+                        <CustomCalendar
+                          value={bookingDates.endDate}
+                          onChange={(date) => {
+                            setBookingDates({ ...bookingDates, endDate: date });
+                          }}
+                          onClose={() => setShowEndCalendar(false)}
+                          minDate={(() => {
+                            if (bookingDates.startDate) {
+                              const start = new Date(bookingDates.startDate);
+                              start.setDate(start.getDate() + 1);
+                              return start.toISOString().split('T')[0];
+                            }
+                            const tomorrow = new Date();
+                            tomorrow.setDate(tomorrow.getDate() + 1);
+                            return tomorrow.toISOString().split('T')[0];
+                          })()}
+                          rangeStart={bookingDates.startDate}
+                          rangeEnd={bookingDates.endDate || bookingDates.startDate}
+                        />
+                      )}
+                    </AnimatePresence>
                   </div>
                 </div>
                 <div className="flex flex-col gap-4">
@@ -1947,6 +2083,7 @@ function AdminCars() {
   const [editingId, setEditingId] = useState(null);
   const [carImages, setCarImages] = useState([]);
   const [imageUrl, setImageUrl] = useState('');
+  const [imageFile, setImageFile] = useState(null);
   const [imagePrimary, setImagePrimary] = useState(true);
   const [error, setError] = useState(null);
   const [form, setForm] = useState({
@@ -1954,10 +2091,13 @@ function AdminCars() {
     category_id: '',
     modele: '',
     transmission: '',
-    nombre_places: '',
-    nombre_portes: '',
     prix_par_jour: '',
-    statut: 'DISPONIBLE'
+    statut: 'DISPONIBLE',
+    immatriculation: '',
+    couleur: '',
+    type_carburant: '',
+    ville: '',
+    description: ''
   });
 
   const loadCars = async (page = 1) => {
@@ -1990,14 +2130,18 @@ function AdminCars() {
       category_id: '',
       modele: '',
       transmission: '',
-      nombre_places: '',
-      nombre_portes: '',
       prix_par_jour: '',
-      statut: 'DISPONIBLE'
+      statut: 'DISPONIBLE',
+      immatriculation: '',
+      couleur: '',
+      type_carburant: '',
+      ville: '',
+      description: ''
     });
     setEditingId(null);
     setCarImages([]);
     setImageUrl('');
+    setImageFile(null);
     setImagePrimary(true);
     setError(null);
   };
@@ -2012,13 +2156,18 @@ function AdminCars() {
         category_id: car.category_id?.toString() || '',
         modele: car.modele || '',
         transmission: car.transmission || '',
-        nombre_places: car.nombre_places?.toString() || '',
-        nombre_portes: car.nombre_portes?.toString() || '',
         prix_par_jour: car.prix_par_jour?.toString() || '',
-        statut: car.statut || 'DISPONIBLE'
+        statut: car.statut || 'DISPONIBLE',
+        immatriculation: '',
+        couleur: '',
+        type_carburant: '',
+        ville: '',
+        description: ''
       });
       setCarImages(car.images || []);
       setImageUrl('');
+      setImageFile(null);
+      setImagePrimary(true);
     }
   };
 
@@ -2030,17 +2179,33 @@ function AdminCars() {
   const handleSubmit = async (event) => {
     event.preventDefault();
     setError(null);
-    const payload = {
+    const basePayload = {
       brand_id: form.brand_id ? parseInt(form.brand_id) : undefined,
       category_id: form.category_id ? parseInt(form.category_id) : undefined,
       modele: form.modele?.trim(),
       transmission: form.transmission?.trim(),
-      nombre_places: form.nombre_places ? parseInt(form.nombre_places) : undefined,
-      nombre_portes: form.nombre_portes ? parseInt(form.nombre_portes) : undefined,
       prix_par_jour: form.prix_par_jour ? parseFloat(form.prix_par_jour) : undefined,
       statut: form.statut
     };
-    const cleanedPayload = Object.fromEntries(Object.entries(payload).filter(([, value]) => value !== undefined && value !== ''));
+
+    let payload;
+    if (editingId) {
+      payload = basePayload;
+    } else {
+      payload = {
+        ...basePayload,
+        immatriculation: form.immatriculation?.trim(),
+        couleur: form.couleur?.trim() || undefined,
+        type_carburant: form.type_carburant || undefined,
+        ville: form.ville?.trim(),
+        description: form.description?.trim() || undefined
+      };
+    }
+
+    const cleanedPayload = Object.fromEntries(
+      Object.entries(payload).filter(([, value]) => value !== undefined && value !== '')
+    );
+
     const result = editingId
       ? await adminService.updateCar(editingId, cleanedPayload)
       : await adminService.createCar(cleanedPayload);
@@ -2051,8 +2216,35 @@ function AdminCars() {
     }
 
     const carId = editingId || result.car?.id;
-    if (imageUrl && carId) {
-      await adminService.createCarImage({ car_id: carId, image_url: imageUrl, is_primary: imagePrimary });
+    if (carId) {
+      let finalImageUrl = imageUrl;
+      if (imageFile) {
+        // Just pass the file object directly, the service handles FormData
+        const uploadRes = await adminService.uploadCarImage(imageFile);
+        if (uploadRes.success) {
+          // The service returns the url directly in the success object
+          finalImageUrl = uploadRes.url;
+        } else {
+          setError(uploadRes.error?.message || 'Erreur lors de l’upload de l’image');
+          return;
+        }
+      }
+      
+      if (finalImageUrl) {
+        await adminService.createCarImage({ 
+          car_id: carId, 
+          image_url: finalImageUrl, 
+          is_primary: imagePrimary 
+        });
+        
+        // If we are editing, refresh the images list immediately
+        if (editingId) {
+          const updatedCarRes = await adminService.getCarById(editingId);
+          if (updatedCarRes.success) {
+            setCarImages(updatedCarRes.car.images || []);
+          }
+        }
+      }
     }
 
     resetForm();
@@ -2078,65 +2270,125 @@ function AdminCars() {
         </h3>
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-2">
-              <label className="text-[9px] font-black uppercase tracking-widest text-white/40">Marque</label>
-              <select value={form.brand_id} onChange={(e) => setForm({ ...form, brand_id: e.target.value })} className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-xs font-bold outline-none focus:border-[#ff003c]">
-                <option value="">Sélectionner</option>
-                {brands.map((brand) => (
-                  <option key={brand.id} value={brand.id}>{brand.name}</option>
-                ))}
-              </select>
-            </div>
-            <div className="space-y-2">
-              <label className="text-[9px] font-black uppercase tracking-widest text-white/40">Catégorie</label>
-              <select value={form.category_id} onChange={(e) => setForm({ ...form, category_id: e.target.value })} className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-xs font-bold outline-none focus:border-[#ff003c]">
-                <option value="">Sélectionner</option>
-                {categories.map((category) => (
-                  <option key={category.id} value={category.id}>{category.name}</option>
-                ))}
-              </select>
-            </div>
+            <AdminSelect
+              label="Marque"
+              value={form.brand_id}
+              onChange={(val) => setForm({ ...form, brand_id: val })}
+              options={[
+                { value: '', label: 'Sélectionner' },
+                ...brands.map((brand) => ({
+                  value: String(brand.id),
+                  label: brand.name
+                }))
+              ]}
+            />
+            <AdminSelect
+              label="Catégorie"
+              value={form.category_id}
+              onChange={(val) => setForm({ ...form, category_id: val })}
+              options={[
+                { value: '', label: 'Sélectionner' },
+                ...categories.map((category) => ({
+                  value: String(category.id),
+                  label: category.name
+                }))
+              ]}
+            />
             <div className="space-y-2">
               <label className="text-[9px] font-black uppercase tracking-widest text-white/40">Modèle</label>
               <input value={form.modele} onChange={(e) => setForm({ ...form, modele: e.target.value })} className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-xs font-bold outline-none focus:border-[#ff003c]" />
             </div>
-            <div className="space-y-2">
-              <label className="text-[9px] font-black uppercase tracking-widest text-white/40">Transmission</label>
-              <input value={form.transmission} onChange={(e) => setForm({ ...form, transmission: e.target.value })} className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-xs font-bold outline-none focus:border-[#ff003c]" />
-            </div>
-            <div className="space-y-2">
-              <label className="text-[9px] font-black uppercase tracking-widest text-white/40">Places</label>
-              <input type="number" value={form.nombre_places} onChange={(e) => setForm({ ...form, nombre_places: e.target.value })} className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-xs font-bold outline-none focus:border-[#ff003c]" />
-            </div>
-            <div className="space-y-2">
-              <label className="text-[9px] font-black uppercase tracking-widest text-white/40">Portes</label>
-              <input type="number" value={form.nombre_portes} onChange={(e) => setForm({ ...form, nombre_portes: e.target.value })} className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-xs font-bold outline-none focus:border-[#ff003c]" />
-            </div>
+            <AdminSelect
+              label="Transmission"
+              value={form.transmission}
+              onChange={(val) => setForm({ ...form, transmission: val })}
+              options={[
+                { value: '', label: 'Sélectionner' },
+                { value: 'Automatique', label: 'Automatique' },
+                { value: 'Manuelle', label: 'Manuelle' }
+              ]}
+            />
             <div className="space-y-2">
               <label className="text-[9px] font-black uppercase tracking-widest text-white/40">Prix / jour (MAD)</label>
               <input type="number" value={form.prix_par_jour} onChange={(e) => setForm({ ...form, prix_par_jour: e.target.value })} className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-xs font-bold outline-none focus:border-[#ff003c]" />
             </div>
-            <div className="space-y-2">
-              <label className="text-[9px] font-black uppercase tracking-widest text-white/40">Statut</label>
-              <select value={form.statut} onChange={(e) => setForm({ ...form, statut: e.target.value })} className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-xs font-bold outline-none focus:border-[#ff003c]">
-                <option value="DISPONIBLE">DISPONIBLE</option>
-                <option value="LOUE">LOUÉE</option>
-                <option value="MAINTENANCE">MAINTENANCE</option>
-              </select>
-            </div>
+            <AdminSelect
+              label="Statut"
+              value={form.statut}
+              onChange={(val) => setForm({ ...form, statut: val })}
+              options={[
+                { value: 'DISPONIBLE', label: 'DISPONIBLE' },
+                { value: 'LOUE', label: 'LOUÉE' },
+                { value: 'MAINTENANCE', label: 'MAINTENANCE' }
+              ]}
+            />
           </div>
+          {!editingId && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <label className="text-[9px] font-black uppercase tracking-widest text-white/40">Immatriculation</label>
+                <input
+                  value={form.immatriculation}
+                  onChange={(e) => setForm({ ...form, immatriculation: e.target.value })}
+                  className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-xs font-bold outline-none focus:border-[#ff003c]"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[9px] font-black uppercase tracking-widest text-white/40">Couleur</label>
+                <input
+                  value={form.couleur}
+                  onChange={(e) => setForm({ ...form, couleur: e.target.value })}
+                  className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-xs font-bold outline-none focus:border-[#ff003c]"
+                />
+              </div>
+              <AdminSelect
+                label="Carburant"
+                value={form.type_carburant}
+                onChange={(val) => setForm({ ...form, type_carburant: val })}
+                options={[
+                  { value: '', label: 'Sélectionner' },
+                  { value: 'ESSENCE', label: 'Essence' },
+                  { value: 'DIESEL', label: 'Diesel' },
+                  { value: 'ELECTRIQUE', label: 'Électrique' },
+                  { value: 'HYBRIDE', label: 'Hybride' }
+                ]}
+              />
+              <div className="space-y-2">
+                <label className="text-[9px] font-black uppercase tracking-widest text-white/40">Ville</label>
+                <input
+                  value={form.ville}
+                  onChange={(e) => setForm({ ...form, ville: e.target.value })}
+                  className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-xs font-bold outline-none focus:border-[#ff003c]"
+                />
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <label className="text-[9px] font-black uppercase tracking-widest text-white/40">Description (interne agence)</label>
+                <textarea
+                  value={form.description}
+                  onChange={(e) => setForm({ ...form, description: e.target.value })}
+                  className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-xs font-bold outline-none focus:border-[#ff003c] min-h-[80px]"
+                />
+              </div>
+            </div>
+          )}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="md:col-span-2 space-y-2">
               <label className="text-[9px] font-black uppercase tracking-widest text-white/40">URL Image</label>
               <input value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-xs font-bold outline-none focus:border-[#ff003c]" />
             </div>
             <div className="space-y-2">
-              <label className="text-[9px] font-black uppercase tracking-widest text-white/40">Image principale</label>
-              <select value={imagePrimary ? 'true' : 'false'} onChange={(e) => setImagePrimary(e.target.value === 'true')} className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-xs font-bold outline-none focus:border-[#ff003c]">
-                <option value="true">Oui</option>
-                <option value="false">Non</option>
-              </select>
+              <label className="text-[9px] font-black uppercase tracking-widest text-white/40">Fichier image (upload)</label>
+              <input type="file" accept="image/*" onChange={(e) => setImageFile(e.target.files?.[0] || null)} className="w-full bg-white/5 border border-white/10 p-3 rounded-2xl text-[10px] font-bold outline-none focus:border-[#ff003c]" />
             </div>
+            <AdminSelect
+              label="Image principale"
+              value={imagePrimary ? 'true' : 'false'}
+              onChange={(val) => setImagePrimary(val === 'true')}
+              options={[
+                { value: 'true', label: 'Oui' },
+                { value: 'false', label: 'Non' }
+              ]}
+            />
           </div>
           {error && <div className="text-red-500 text-sm font-bold">{error}</div>}
           <div className="flex flex-wrap gap-4">
@@ -2156,7 +2408,7 @@ function AdminCars() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {carImages.map((img) => (
                 <div key={img.id} className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
-                  <img src={img.image_url} alt={img.alt_text || 'Car'} className="h-32 w-full object-cover" />
+                  <img src={getImageUrl(img.image_url)} alt={img.alt_text || 'Car'} className="h-32 w-full object-cover" />
                   <div className="p-3 flex items-center justify-between text-[9px] font-black uppercase tracking-widest text-white/40">
                     <span>{img.is_primary ? 'Principale' : 'Secondaire'}</span>
                     <button type="button" onClick={() => handleDeleteImage(img.id)} className="text-red-400 hover:text-red-300">Supprimer</button>
@@ -2187,8 +2439,6 @@ function AdminCars() {
                   </div>
                   <div className="grid grid-cols-2 gap-4 text-[10px] font-bold text-white/40 uppercase tracking-widest">
                     <span>{car.transmission || '—'}</span>
-                    <span>{car.nombre_places || '—'} places</span>
-                    <span>{car.nombre_portes || '—'} portes</span>
                     <span className="text-white">{formatPrice(car.prix_par_jour)} MAD</span>
                   </div>
                   <div className="flex flex-wrap gap-3 mt-6">
@@ -2287,7 +2537,7 @@ function AdminBookings() {
                       value={statusName || ''}
                       onChange={(e) => handleStatusChange(booking, e.target.value)}
                       disabled={updatingId === booking.id}
-                      className="bg-white/5 border border-white/10 px-4 py-2 rounded-2xl text-[9px] font-black uppercase tracking-widest outline-none"
+                      className="bg-white/5 border border-white/10 px-4 py-2 rounded-2xl text-[9px] font-black uppercase tracking-widest text-white/80 outline-none focus:border-[#ff003c] focus:text-white appearance-none cursor-pointer"
                     >
                       {statuses.map((statusOption) => (
                         <option key={statusOption} value={statusOption}>{statusOption}</option>

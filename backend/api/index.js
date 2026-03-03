@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
+const path = require('path');
 require('dotenv').config({ override: true });
 
 // Import routes
@@ -15,6 +16,7 @@ const reviewRoutes = require('../src/routes/review.routes');
 const adminRoutesComplete = require('../src/routes/admin.routes.complete');
 const protectionRoutes = require('../src/routes/protection.routes');
 const pickupSiteRoutes = require('../src/routes/pickupsite.routes');
+const uploadRoutes = require('../src/routes/upload.routes');
 
 // Import middlewares
 const { errorHandler } = require('../src/middlewares/errorHandler.middleware');
@@ -24,7 +26,15 @@ const { sanitizeRequest } = require('../src/middlewares/validation.middleware');
 const app = express();
 
 // Security middleware
-app.use(helmet());
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  contentSecurityPolicy: {
+    directives: {
+      ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+      "img-src": ["'self'", "data:", "http:", "https:", "*"],
+    },
+  },
+}));
 
 app.set('etag', false);
 
@@ -39,12 +49,13 @@ const allowedOrigins = [
   'http://localhost:3001',
   'http://localhost:5173',
   'http://localhost:4173',
+  'http://localhost:5000',
 ].filter(Boolean);
 const corsOptions = {
   origin: (origin, callback) => {
     if (!origin) return callback(null, true);
     if (allowedOrigins.includes(origin)) return callback(null, true);
-    return callback(new Error('Not allowed by CORS'));
+    return callback(null, true); // Allow all for dev
   },
   credentials: true,
   methods: ['GET','POST','PUT','DELETE','OPTIONS'],
@@ -58,11 +69,36 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(sanitizeRequest);
 
+// Static files (uploaded assets)
+const uploadsDir = process.env.UPLOAD_PATH 
+  ? (path.isAbsolute(process.env.UPLOAD_PATH) ? process.env.UPLOAD_PATH : path.resolve(process.cwd(), process.env.UPLOAD_PATH))
+  : path.join(__dirname, '../../public/uploads');
+
+console.log('Serving uploads from:', uploadsDir);
+
+// Serve static files with CORS enabled for those specific routes
+app.use('/uploads', cors(corsOptions), (req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  // Log image requests to debug
+  console.log(`[Static] Request for ${req.url} -> Looking in ${path.join(uploadsDir, req.url)}`);
+  next();
+}, express.static(uploadsDir));
+
+app.use('/public/uploads', cors(corsOptions), (req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  next();
+}, express.static(uploadsDir));
+// Root level static serving as fallback
+app.use(express.static(path.join(__dirname, '../../public')));
+
 app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('Strict-Transport-Security', 'max-age=31536000');
-  res.setHeader('Content-Security-Policy', "default-src 'self'");
+  // Allow images from any origin in CSP
+  res.setHeader('Content-Security-Policy', "default-src 'self'; img-src 'self' data: http: https: *;");
   next();
 });
 
@@ -100,6 +136,7 @@ app.use('/api/reviews', reviewRoutes);
 app.use('/api/admin', adminRoutesComplete);
 app.use('/api/protections', protectionRoutes);
 app.use('/api/pickup-sites', pickupSiteRoutes);
+app.use('/api/upload', uploadRoutes);
 
 // 404 handler
 app.use('*', (req, res) => {

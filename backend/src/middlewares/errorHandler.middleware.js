@@ -20,9 +20,19 @@ const errorHandler = (err, req, res, next) => {
   }
 
   if (err.code && err.code.startsWith('P')) {
-    return res.status(400).json({
+    return res.status(503).json({
       success: false,
-      error: { code: 'DATABASE_ERROR', message: 'Erreur de base de données' }
+      error: { code: 'DATABASE_ERROR', message: 'Service momentanément indisponible. Veuillez réessayer plus tard.' }
+    });
+  }
+
+  if (
+    err.name === 'PrismaClientInitializationError' ||
+    (typeof err.message === 'string' && err.message.includes("Can't reach database server"))
+  ) {
+    return res.status(503).json({
+      success: false,
+      error: { code: 'DATABASE_UNAVAILABLE', message: 'Service momentanément indisponible. Veuillez réessayer plus tard.' }
     });
   }
 
@@ -97,9 +107,8 @@ const errorHandler = (err, req, res, next) => {
     success: false,
     error: {
       code: 'INTERNAL_ERROR',
-      message: process.env.NODE_ENV === 'production' ? 'Erreur interne du serveur' : (err.message || 'Unexpected error')
-    },
-    ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
+      message: 'Erreur interne du serveur'
+    }
   });
 };
 

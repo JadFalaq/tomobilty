@@ -126,7 +126,7 @@ const CustomCalendar = ({ value, onChange, onClose, minDate, rangeStart, rangeEn
       initial={{ opacity: 0, scale: 0.95, y: 10 }}
       animate={{ opacity: 1, scale: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.95, y: 10 }}
-      className="absolute top-full left-0 mt-2 bg-[#0a0a0a] border border-white/10 rounded-2xl p-6 shadow-2xl z-[999] min-w-[320px]"
+      className="absolute top-full left-0 mt-2 bg-[#0a0a0a] border border-white/10 rounded-2xl p-6 shadow-2xl z-[9999] min-w-[320px]"
     >
       <div className="flex items-center justify-between mb-6">
         <button

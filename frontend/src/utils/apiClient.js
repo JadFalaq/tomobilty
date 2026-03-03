@@ -37,9 +37,13 @@ const processQueue = (error, token = null) => {
 apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
-    const originalRequest = error.config;
+    const originalRequest = error.config || {};
 
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    const isAuthRoute =
+      typeof originalRequest.url === 'string' &&
+      originalRequest.url.startsWith('/auth/');
+
+    if (error.response?.status === 401 && !originalRequest._retry && !isAuthRoute) {
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject });
@@ -127,6 +131,44 @@ export const handleApiError = (error) => {
     code: 'UNKNOWN_ERROR',
     message: error.message || 'Une erreur inattendue est survenue',
   };
+};
+
+export const getImageUrl = (url) => {
+  if (!url) return 'https://images.unsplash.com/photo-1494976388531-d1058494cdd8?q=80&w=800';
+  
+  // 1. If it's already an absolute external URL (Supabase, Unsplash, etc.), return it
+  // But we filter out our old localhost:5000 links
+  if (url.startsWith('http') && !url.includes('localhost:5000') && !url.includes('127.0.0.1:5000')) {
+    return url;
+  }
+
+  // 2. If it's a relative path or an old localhost link, we need to handle it
+  const backendBase = API_CONFIG.BASE_URL.replace('/api', '');
+  let path = url;
+
+  if (url.includes('://')) {
+    try {
+      const urlObj = new URL(url);
+      path = urlObj.pathname;
+    } catch (e) {
+      const parts = url.split(':5000');
+      path = parts.length > 1 ? parts[1] : url;
+    }
+  }
+
+  // Ensure path starts with /
+  if (!path.startsWith('/')) path = '/' + path;
+  
+  // Handle /public/uploads/ vs /uploads/
+  if (path.startsWith('/public/uploads/')) {
+    path = path.replace('/public/uploads/', '/uploads/');
+  }
+  
+  // If we are in production (or if it's a relative path that should be served by backend)
+  const finalUrl = `${backendBase}${path}`;
+  
+  // Add a cache buster for admin uploads only if it's not a cloud URL
+  return url.includes('supabase.co') ? url : `${finalUrl}?t=${new Date().getTime()}`;
 };
 
 export default apiClient;

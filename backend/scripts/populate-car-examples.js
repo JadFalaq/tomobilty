@@ -45,8 +45,6 @@ async function populateCarExamples() {
         category_id: getCategoryId('Économique'),
         modele: 'Clio',
         transmission: 'Manuelle',
-        nombre_places: 5,
-        nombre_portes: 5,
         prix_par_jour: 250,
         statut: 'DISPONIBLE',
         variantes: {
@@ -65,8 +63,6 @@ async function populateCarExamples() {
         category_id: getCategoryId('Économique'),
         modele: '208',
         transmission: 'Manuelle',
-        nombre_places: 5,
-        nombre_portes: 5,
         prix_par_jour: 280,
         statut: 'DISPONIBLE',
         variantes: {
@@ -87,8 +83,6 @@ async function populateCarExamples() {
         category_id: getCategoryId('Compacte'),
         modele: 'Golf',
         transmission: 'Automatique',
-        nombre_places: 5,
-        nombre_portes: 5,
         prix_par_jour: 350,
         statut: 'DISPONIBLE',
         variantes: {
@@ -107,8 +101,6 @@ async function populateCarExamples() {
         category_id: getCategoryId('Compacte'),
         modele: 'Corolla',
         transmission: 'Automatique',
-        nombre_places: 5,
-        nombre_portes: 4,
         prix_par_jour: 380,
         statut: 'DISPONIBLE',
         variantes: {
@@ -129,8 +121,6 @@ async function populateCarExamples() {
         category_id: getCategoryId('SUV'),
         modele: 'RAV4',
         transmission: 'Automatique',
-        nombre_places: 5,
-        nombre_portes: 5,
         prix_par_jour: 550,
         statut: 'DISPONIBLE',
         variantes: {
@@ -149,8 +139,6 @@ async function populateCarExamples() {
         category_id: getCategoryId('SUV'),
         modele: 'Qashqai',
         transmission: 'Automatique',
-        nombre_places: 5,
-        nombre_portes: 5,
         prix_par_jour: 480,
         statut: 'DISPONIBLE',
         variantes: {
@@ -171,8 +159,6 @@ async function populateCarExamples() {
         category_id: getCategoryId('Utilitaire'),
         modele: 'Kangoo',
         transmission: 'Manuelle',
-        nombre_places: 2,
-        nombre_portes: 4,
         prix_par_jour: 300,
         statut: 'DISPONIBLE',
         variantes: {
@@ -191,8 +177,6 @@ async function populateCarExamples() {
         category_id: getCategoryId('Utilitaire'),
         modele: 'Partner',
         transmission: 'Manuelle',
-        nombre_places: 3,
-        nombre_portes: 4,
         prix_par_jour: 320,
         statut: 'DISPONIBLE',
         variantes: {

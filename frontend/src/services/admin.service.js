@@ -45,7 +45,10 @@ export const adminService = {
     try {
       const response = await apiClient.post('/admin/cars', data);
       if (response.data.success) {
-        return { success: true, car: response.data.data };
+        // The backend returns { car, variante } in a transaction
+        // We extract the car object for consistency
+        const carData = response.data.data.car || response.data.data;
+        return { success: true, car: carData };
       }
       return { success: false, error: response.data };
     } catch (error) {
@@ -211,6 +214,24 @@ export const adminService = {
       const response = await apiClient.post('/admin/car-images', data);
       if (response.data.success) {
         return { success: true, image: response.data.data };
+      }
+      return { success: false, error: response.data };
+    } catch (error) {
+      return { success: false, error: handleApiError(error) };
+    }
+  },
+
+  async uploadCarImage(file) {
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const response = await apiClient.post('/upload/car-image', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+      if (response.data.success) {
+        return { success: true, url: response.data.data.url, meta: response.data.data };
       }
       return { success: false, error: response.data };
     } catch (error) {

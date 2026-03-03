@@ -335,6 +335,8 @@ const getMyBookings = asyncHandler(async (req, res) => {
       id: b.id,
       date_debut: b.date_debut,
       date_fin: b.date_fin,
+      lieu_prise_en_charge: b.lieu_prise_en_charge,
+      lieu_retour: b.lieu_retour,
       prix_total: b.prix_total,
       status: { name: b.status?.name || b.status_name },
       mode_paiement: b.mode_paiement,

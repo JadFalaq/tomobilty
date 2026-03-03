@@ -3,8 +3,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model User {
@@ -166,8 +167,6 @@ model Car {
   category_id       Int
   modele            String        @db.VarChar(50)
   transmission      String?       @db.VarChar(20)
-  nombre_places     Int?
-  nombre_portes     Int?
   prix_par_jour     Decimal       @db.Decimal(10, 2)
   statut            CarStatus     @default(DISPONIBLE)
   date_creation     DateTime      @default(now())
