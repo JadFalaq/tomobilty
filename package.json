@@ -4,7 +4,7 @@
   "description": "Plateforme de location de voitures au Maroc",
   "scripts": {
     "dev": "npm --prefix ./frontend run dev",
-    "build": "npm install --prefix ./frontend && npm --prefix ./frontend run build",
+    "build": "cd frontend && npm install && npm run build",
     "start": "npm --prefix ./frontend run preview -- --host",
     "lint": "npm --prefix ./frontend run build",
     "api:dev": "npm run prisma:generate && node backend/api/index.js",
