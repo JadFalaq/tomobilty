@@ -15,14 +15,11 @@ import { carService } from './services/car.service';
 import { bookingService } from './services/booking.service';
 import { paymentService } from './services/payment.service';
 import { protectionService } from './services/protection.service';
-import { pickupSiteService } from './services/pickupsite.service';
 import { loyaltyService } from './services/loyalty.service';
 import { adminService } from './services/admin.service';
 import { getImageUrl } from './utils/apiClient';
-import { formatDateForAPI, formatDateForDisplay, formatPrice } from './utils/dateUtils';
-import CustomCalendar from './components/CustomCalendar';
+import { formatDateForDisplay, formatPrice } from './utils/dateUtils';
 import SearchResultsPage from './components/SearchResultsPage';
-import BookingDetailPage from './components/BookingDetailPage';
 import AboutPage from './components/AboutPage';
 
 const THEME = {
@@ -85,7 +82,9 @@ function Footer({ setView }) {
                 <Facebook size={18} className="text-white/60 group-hover:text-white" />
               </a>
               <a
-                href="#"
+                href="https://www.instagram.com/tommobilty/?utm_source=ig_web_button_share_sheet"
+                target="_blank"
+                rel="noreferrer"
                 className="w-10 h-10 rounded-xl bg-white/5 hover:bg-[#ff003c] border border-white/10 hover:border-[#ff003c] flex items-center justify-center transition-all group"
               >
                 <Instagram size={18} className="text-white/60 group-hover:text-white" />
@@ -110,11 +109,6 @@ function Footer({ setView }) {
               <li>
                 <button onClick={() => setView('cars')} className="text-white/60 hover:text-[#ff003c] text-sm font-bold transition-colors">
                   Nos Voitures
-                </button>
-              </li>
-              <li>
-                <button onClick={() => setView('bookings')} className="text-white/60 hover:text-[#ff003c] text-sm font-bold transition-colors">
-                  Réservations
                 </button>
               </li>
               <li>
@@ -162,15 +156,15 @@ function Footer({ setView }) {
               </li>
               <li className="flex items-start gap-3">
                 <Phone size={16} className="text-[#ff003c] mt-1 flex-shrink-0" />
-                <span className="text-white/60 text-sm font-medium">
-                  +212 5XX XXX XXX
-                </span>
+                <a href="tel:+212662719526" className="text-white/60 text-sm font-medium hover:text-[#ff003c] transition-colors">
+                  +212 662719526
+                </a>
               </li>
               <li className="flex items-start gap-3">
                 <Mail size={16} className="text-[#ff003c] mt-1 flex-shrink-0" />
-                <span className="text-white/60 text-sm font-medium">
-                  contact@tommobilty.ma
-                </span>
+                <a href="mailto:support@tommobilty.com" className="text-white/60 text-sm font-medium hover:text-[#ff003c] transition-colors">
+                  support@tommobilty.com
+                </a>
               </li>
             </ul>
           </div>
@@ -212,9 +206,6 @@ function Navbar({ currentView, setView, onOpenAuth, user, onLogout }) {
         <div className="hidden md:flex gap-8 text-[10px] font-black uppercase tracking-[0.2em] text-white/70">
           <button onClick={() => setView('home')} className={`hover:text-[#ff003c] transition-colors ${currentView === 'home' ? 'text-[#ff003c]' : ''}`}>Accueil</button>
           <button onClick={() => setView('cars')} className={`hover:text-[#ff003c] transition-colors ${currentView === 'cars' ? 'text-[#ff003c]' : ''}`}>Nos Voitures</button>
-          {user && (
-            <button onClick={() => setView('bookings')} className={`hover:text-[#ff003c] transition-colors ${currentView === 'bookings' ? 'text-[#ff003c]' : ''}`}>Réservations</button>
-          )}
           {user?.role === 'ADMIN' && (
             <button onClick={() => setView('admin')} className={`hover:text-[#ff003c] transition-colors ${currentView === 'admin' ? 'text-[#ff003c]' : ''}`}>Admin</button>
           )}
@@ -1043,192 +1034,28 @@ function AdminSelect({ label, value, onChange, options }) {
 }
 
 function SearchSection({ isSticky, onSearch }) {
-  const [searchParams, setSearchParams] = useState({
-    pickupSiteId: '',
-    returnSiteId: '',
-    startDate: '',
-    endDate: '',
-  });
-  const [pickupSites, setPickupSites] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [showStartCalendar, setShowStartCalendar] = useState(false);
-  const [showEndCalendar, setShowEndCalendar] = useState(false);
-  const startCalendarRef = useRef(null);
-  const endCalendarRef = useRef(null);
-
-  const scrollCalendarIntoView = (ref) => {
-    if (!ref.current || isSticky) return;
-    const rect = ref.current.getBoundingClientRect();
-    const offset = rect.top + window.pageYOffset - 200;
-    window.scrollTo({ top: offset, behavior: 'smooth' });
-  };
-
-  useEffect(() => {
-    fetchPickupSites();
-  }, []);
-
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (startCalendarRef.current && !startCalendarRef.current.contains(event.target)) {
-        setShowStartCalendar(false);
-      }
-      if (endCalendarRef.current && !endCalendarRef.current.contains(event.target)) {
-        setShowEndCalendar(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, []);
-
-  const fetchPickupSites = async () => {
-    setLoading(true);
-    const result = await pickupSiteService.getPickupSites();
-    if (result.success) {
-      setPickupSites(result.sites);
-    }
-    setLoading(false);
-  };
-
   const handleSearch = () => {
-    if (!searchParams.startDate || !searchParams.endDate) {
-      alert('Veuillez sélectionner les dates de début et de fin');
-      return;
-    }
-    onSearch(searchParams);
+    onSearch({});
   };
 
   return (
     <div className="relative w-full h-[86px] md:h-[86px]">
       <motion.div className={`${isSticky ? 'fixed top-24 inset-x-0 z-[90] flex justify-center px-4 md:px-0' : 'relative w-full flex justify-center'}`}>
         <div className={`${GLASS} p-2 rounded-3xl border-[#ff003c]/30 ${GLOW_RED} transition-all duration-500 w-full max-w-6xl`}>
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
-          <LocationDropdown
-            label="Lieu de Retrait"
-            icon={MapPin}
-            value={searchParams.pickupSiteId}
-            onChange={(val) => setSearchParams({ ...searchParams, pickupSiteId: val })}
-            sites={pickupSites}
-            disabled={loading}
-          />
-          <LocationDropdown
-            label="Lieu de Retour"
-            icon={Navigation}
-            value={searchParams.returnSiteId}
-            onChange={(val) => setSearchParams({ ...searchParams, returnSiteId: val })}
-            sites={pickupSites}
-            disabled={loading}
-          />
-          <div ref={startCalendarRef} className="flex flex-col p-3 border-r border-white/10 relative">
-            <label className="text-[8px] font-black text-[#ff003c] uppercase mb-1 text-left">Départ</label>
-            <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-2xl px-3 py-2 relative hover:border-[#ff003c] transition-colors">
-              <button
-                type="button"
-                onClick={() => {
-                  scrollCalendarIntoView(startCalendarRef);
-                  setShowStartCalendar(!showStartCalendar);
-                }}
-                className="flex-shrink-0 hover:scale-110 transition-transform"
-              >
-                <Calendar size={16} className="text-[#ff003c]" />
-              </button>
-              <input 
-                type="text"
-                readOnly
-                value={searchParams.startDate ? new Date(searchParams.startDate).toLocaleDateString('fr-FR') : ''}
-                onClick={() => {
-                  scrollCalendarIntoView(startCalendarRef);
-                  setShowStartCalendar(!showStartCalendar);
-                }}
-                placeholder="Sélectionner..."
-                className="bg-transparent border-none outline-none text-white text-xs font-bold w-full cursor-pointer"
-              />
-              
+          <div className="grid grid-cols-1 md:grid-cols-[1.5fr_1fr] gap-2">
+          <div className="flex items-center justify-between gap-4 px-6 py-5 rounded-2xl bg-white/5 border border-white/10">
+            <div className="text-left">
+              <p className="text-[8px] font-black text-[#ff003c] uppercase tracking-[0.3em] mb-1">Showroom</p>
+              <p className="text-white text-sm md:text-base font-bold uppercase italic">Decouvrez toutes les voitures disponibles dans notre societe</p>
             </div>
-            <AnimatePresence>
-              {showStartCalendar && (
-                <CustomCalendar
-                  value={searchParams.startDate}
-                  onChange={(date) => {
-                    setSearchParams({...searchParams, startDate: date, endDate: ''});
-                    setShowStartCalendar(false);
-                  }}
-                  onClose={() => setShowStartCalendar(false)}
-                  minDate={(() => {
-                    const tomorrow = new Date();
-                    tomorrow.setDate(tomorrow.getDate() + 1);
-                    return tomorrow.toISOString().split('T')[0];
-                  })()}
-                />
-              )}
-            </AnimatePresence>
-          </div>
-          <div ref={endCalendarRef} className="flex flex-col p-3 border-r border-white/10 relative">
-            <label className="text-[8px] font-black text-[#ff003c] uppercase mb-1 text-left">Retour</label>
-            <div
-              className={`flex items-center gap-2 bg-white/5 border border-white/10 rounded-2xl px-3 py-2 relative transition-colors ${
-                !searchParams.startDate ? 'opacity-30 cursor-not-allowed' : 'hover:border-[#ff003c]'
-              }`}
-            >
-              <button
-                type="button"
-                onClick={() => {
-                  if (!searchParams.startDate) return;
-                  scrollCalendarIntoView(endCalendarRef);
-                  setShowEndCalendar(!showEndCalendar);
-                }}
-                className={`flex-shrink-0 transition-transform ${!searchParams.startDate ? '' : 'hover:scale-110'}`}
-              >
-                <Clock size={16} className="text-[#ff003c]" />
-              </button>
-              <input 
-                type="text"
-                readOnly
-                value={searchParams.endDate ? new Date(searchParams.endDate).toLocaleDateString('fr-FR') : ''}
-                onClick={() => {
-                  if (!searchParams.startDate) return;
-                  scrollCalendarIntoView(endCalendarRef);
-                  setShowEndCalendar(!showEndCalendar);
-                }}
-                placeholder={searchParams.startDate ? 'Sélectionner...' : 'Choisir la date de départ d\'abord'}
-                className={`bg-transparent border-none outline-none text-xs font-bold w-full ${
-                  !searchParams.startDate ? 'cursor-not-allowed text-white/30' : 'cursor-pointer text-white'
-                }`}
-              />
-            </div>
-            <AnimatePresence>
-              {showEndCalendar && (
-                <CustomCalendar
-                  value={searchParams.endDate}
-                  onChange={(date) => {
-                    setSearchParams({...searchParams, endDate: date});
-                    setShowEndCalendar(false);
-                  }}
-                  onClose={() => setShowEndCalendar(false)}
-                  minDate={(() => {
-                    if (searchParams.startDate) {
-                      const startDate = new Date(searchParams.startDate);
-                      startDate.setDate(startDate.getDate() + 2);
-                      return startDate.toISOString().split('T')[0];
-                    }
-                    const tomorrow = new Date();
-                    tomorrow.setDate(tomorrow.getDate() + 3);
-                    return tomorrow.toISOString().split('T')[0];
-                  })()}
-                  rangeStart={searchParams.startDate}
-                  rangeEnd={searchParams.endDate || searchParams.startDate}
-                />
-              )}
-            </AnimatePresence>
+            <Car size={24} className="text-[#ff003c] hidden md:block" />
           </div>
           <button 
             onClick={handleSearch}
             className="bg-[#ff003c] hover:bg-white hover:text-black transition-all rounded-2xl flex items-center justify-center gap-3 text-white font-black uppercase italic py-4 md:py-0"
           >
             <Search size={20} />
+            <span>Voir la flotte</span>
           </button>
           </div>
         </div>
@@ -1315,35 +1142,11 @@ function CarsPage({ selectedCat, setSelectedCat, setView, categories }) {
   const [loading, setLoading] = useState(false);
   const [filters, setFilters] = useState(INITIAL_FILTERS);
   const [pendingFilters, setPendingFilters] = useState(INITIAL_PENDING_FILTERS);
-  const [bookingCar, setBookingCar] = useState(null);
-  const [bookingDates, setBookingDates] = useState({ startDate: '', endDate: '' });
-  const [checkResult, setCheckResult] = useState(null);
   const carSectionRef = useRef(null);
-  const startCalendarRef = useRef(null);
-  const endCalendarRef = useRef(null);
-  const [showStartCalendar, setShowStartCalendar] = useState(false);
-  const [showEndCalendar, setShowEndCalendar] = useState(false);
 
   useEffect(() => {
     fetchCars();
   }, [selectedCat]);
-
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (startCalendarRef.current && !startCalendarRef.current.contains(event.target)) {
-        setShowStartCalendar(false);
-      }
-      if (endCalendarRef.current && !endCalendarRef.current.contains(event.target)) {
-        setShowEndCalendar(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, []);
 
   const fetchCars = async () => {
     setLoading(true);
@@ -1403,30 +1206,6 @@ function CarsPage({ selectedCat, setSelectedCat, setView, categories }) {
   const resetFilters = () => {
     setFilters(INITIAL_FILTERS);
     setPendingFilters(INITIAL_PENDING_FILTERS);
-  };
-
-  const handleCheckAvailability = async () => {
-    if (!bookingDates.startDate || !bookingDates.endDate) {
-      alert('Veuillez sélectionner les dates');
-      return;
-    }
-
-    setCheckResult('checking');
-    const result = await carService.checkAvailability(
-      bookingCar.id,
-      formatDateForAPI(bookingDates.startDate),
-      formatDateForAPI(bookingDates.endDate)
-    );
-
-    if (result.success) {
-      setCheckResult(result.available ? 'available' : 'unavailable');
-    } else {
-      setCheckResult('unavailable');
-    }
-  };
-
-  const confirmReservation = async () => {
-    setView('home');
   };
 
   return (
@@ -1541,11 +1320,25 @@ function CarsPage({ selectedCat, setSelectedCat, setView, categories }) {
                         <div className="absolute top-6 left-6 bg-black/80 backdrop-blur-md px-3 py-1 rounded-full border border-white/10">
                           <span className="text-[9px] font-black text-white uppercase italic tracking-tighter">{formatPrice(car.prix_par_jour)} MAD / J</span>
                         </div>
+                        <div className="absolute top-6 right-6 bg-[#ff003c] backdrop-blur-md px-4 py-2 rounded-full shadow-lg">
+                          <div className="flex items-center gap-2">
+                            <Check size={12} className="text-white" />
+                            <span className="text-[10px] font-black text-white uppercase italic tracking-tighter">DISPONIBLE</span>
+                          </div>
+                        </div>
                       </div>
                       <div className="p-10 text-center md:text-left">
                         <h4 className="text-[10px] font-black text-[#ff003c] uppercase tracking-widest mb-1">{car.brand?.name || 'Marque'}</h4>
-                        <h3 className="text-3xl font-black italic uppercase text-white mb-6">{car.modele}</h3>
-                        <button onClick={() => setBookingCar(car)} className="w-full py-5 bg-white text-black font-black uppercase italic rounded-2xl hover:bg-[#ff003c] hover:text-white transition-all shadow-xl">VÉRIFIER DISPONIBILITÉ</button>
+                        <h3 className="text-3xl font-black italic uppercase text-white mb-2">{car.modele}</h3>
+                        <div className="space-y-3">
+                          <p className="text-[10px] font-black uppercase tracking-[0.25em] text-white/50">
+                            {car.display_variant || car.transmission || 'STANDARD'}
+                          </p>
+                          <div className="text-[10px] font-bold uppercase tracking-widest text-white/40">
+                            Transmission: <span className="text-white">{car.display_variant || car.transmission || '—'}</span>
+                          </div>
+                          <a href="tel:+212662719526" className="block w-full py-5 bg-white text-center text-black font-black uppercase italic rounded-2xl hover:bg-[#ff003c] hover:text-white transition-all shadow-xl">NOUS CONTACTER</a>
+                        </div>
                       </div>
                     </div>
                   );
@@ -1553,114 +1346,6 @@ function CarsPage({ selectedCat, setSelectedCat, setView, categories }) {
               </div>
             )}
           </motion.section>
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {bookingCar && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[200] flex items-center justify-center px-6 bg-black/95 backdrop-blur-3xl">
-            <motion.div initial={{ scale: 0.9, y: 50 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 50 }} className="max-w-4xl w-full bg-[#111] border border-white/10 rounded-[3.5rem] p-10 md:p-16 relative overflow-visible shadow-2xl text-left">
-              <button onClick={() => {setBookingCar(null); setCheckResult(null);}} className="absolute top-10 right-10 text-white hover:text-[#ff003c] transition-colors"><X size={32} /></button>
-              <div className="relative z-10">
-                <h2 className="text-4xl md:text-6xl font-black italic uppercase text-white mb-10 tracking-tighter">{bookingCar.brand?.name} <span className="text-transparent stroke-text">{bookingCar.modele}</span></h2>
-                <div className="grid md:grid-cols-2 gap-8 mb-12">
-                  <div ref={startCalendarRef} className="space-y-3">
-                    <label className="text-[9px] font-black text-white/30 uppercase tracking-[0.3em] ml-2 italic">Début</label>
-                    <div
-                      className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-3xl px-5 py-4 relative hover:border-[#ff003c] transition-colors cursor-pointer"
-                      onClick={() => setShowStartCalendar(!showStartCalendar)}
-                    >
-                      <Calendar size={18} className="text-[#ff003c]" />
-                      <span className="text-sm font-bold text-white">
-                        {bookingDates.startDate
-                          ? new Date(bookingDates.startDate).toLocaleDateString('fr-FR')
-                          : 'Sélectionner...'}
-                      </span>
-                    </div>
-                    <AnimatePresence>
-                      {showStartCalendar && (
-                        <CustomCalendar
-                          value={bookingDates.startDate}
-                          onChange={(date) => {
-                            setBookingDates({ startDate: date, endDate: '' });
-                          }}
-                          onClose={() => setShowStartCalendar(false)}
-                          minDate={(() => {
-                            const tomorrow = new Date();
-                            tomorrow.setDate(tomorrow.getDate() + 1);
-                            return tomorrow.toISOString().split('T')[0];
-                          })()}
-                        />
-                      )}
-                    </AnimatePresence>
-                  </div>
-                  <div ref={endCalendarRef} className="space-y-3">
-                    <label className="text-[9px] font-black text-white/30 uppercase tracking-[0.3em] ml-2 italic">Fin</label>
-                    <div
-                      className={`flex items-center gap-3 bg-white/5 border border-white/10 rounded-3xl px-5 py-4 relative transition-colors ${
-                        !bookingDates.startDate ? 'opacity-30 cursor-not-allowed' : 'hover:border-[#ff003c] cursor-pointer'
-                      }`}
-                      onClick={() => {
-                        if (!bookingDates.startDate) return;
-                        setShowEndCalendar(!showEndCalendar);
-                      }}
-                    >
-                      <Calendar size={18} className="text-[#ff003c]" />
-                      <span
-                        className={`text-sm font-bold ${
-                          bookingDates.startDate ? 'text-white' : 'text-white/40'
-                        }`}
-                      >
-                        {bookingDates.endDate
-                          ? new Date(bookingDates.endDate).toLocaleDateString('fr-FR')
-                          : bookingDates.startDate
-                            ? 'Sélectionner...'
-                            : 'Choisir la date de début d\'abord'}
-                      </span>
-                    </div>
-                    <AnimatePresence>
-                      {showEndCalendar && (
-                        <CustomCalendar
-                          value={bookingDates.endDate}
-                          onChange={(date) => {
-                            setBookingDates({ ...bookingDates, endDate: date });
-                          }}
-                          onClose={() => setShowEndCalendar(false)}
-                          minDate={(() => {
-                            if (bookingDates.startDate) {
-                              const start = new Date(bookingDates.startDate);
-                              start.setDate(start.getDate() + 1);
-                              return start.toISOString().split('T')[0];
-                            }
-                            const tomorrow = new Date();
-                            tomorrow.setDate(tomorrow.getDate() + 1);
-                            return tomorrow.toISOString().split('T')[0];
-                          })()}
-                          rangeStart={bookingDates.startDate}
-                          rangeEnd={bookingDates.endDate || bookingDates.startDate}
-                        />
-                      )}
-                    </AnimatePresence>
-                  </div>
-                </div>
-                <div className="flex flex-col gap-4">
-                  <button onClick={handleCheckAvailability} className="w-full py-6 bg-white text-black font-black uppercase italic rounded-2xl hover:bg-[#ff003c] hover:text-white transition-all shadow-xl">
-                    {checkResult === 'checking' ? 'Vérification...' : 'VÉRIFIER LA DISPONIBILITÉ'}
-                  </button>
-                  {checkResult === 'available' && (
-                    <motion.button initial={{ opacity: 0 }} animate={{ opacity: 1 }} onClick={confirmReservation} className="w-full py-6 bg-[#ff003c] text-white font-black uppercase italic rounded-2xl shadow-lg">
-                      CONFIRMER LA RÉSERVATION
-                    </motion.button>
-                  )}
-                  {checkResult === 'unavailable' && (
-                    <div className="p-6 bg-red-600/10 border border-red-600/30 rounded-3xl text-center text-red-500 font-black uppercase italic tracking-widest">
-                      VÉHICULE NON DISPONIBLE
-                    </div>
-                  )}
-                </div>
-              </div>
-            </motion.div>
-          </motion.div>
         )}
       </AnimatePresence>
     </div>
@@ -2077,7 +1762,6 @@ function AdminOverview() {
 function AdminCars() {
   const [cars, setCars] = useState([]);
   const [brands, setBrands] = useState([]);
-  const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [pagination, setPagination] = useState(null);
   const [editingId, setEditingId] = useState(null);
@@ -2088,16 +1772,10 @@ function AdminCars() {
   const [error, setError] = useState(null);
   const [form, setForm] = useState({
     brand_id: '',
-    category_id: '',
     modele: '',
     transmission: '',
     prix_par_jour: '',
-    statut: 'DISPONIBLE',
-    immatriculation: '',
-    couleur: '',
-    type_carburant: '',
-    ville: '',
-    description: ''
+    statut: 'DISPONIBLE'
   });
 
   const loadCars = async (page = 1) => {
@@ -2111,12 +1789,8 @@ function AdminCars() {
   };
 
   const loadLookups = async () => {
-    const [brandsRes, categoriesRes] = await Promise.all([
-      adminService.listCarBrands({ page: 1, pageSize: 200 }),
-      adminService.listCarCategories({ page: 1, pageSize: 200 })
-    ]);
+    const brandsRes = await adminService.listCarBrands({ page: 1, pageSize: 200 });
     if (brandsRes.success) setBrands(brandsRes.brands || []);
-    if (categoriesRes.success) setCategories(categoriesRes.categories || []);
   };
 
   useEffect(() => {
@@ -2127,16 +1801,10 @@ function AdminCars() {
   const resetForm = () => {
     setForm({
       brand_id: '',
-      category_id: '',
       modele: '',
       transmission: '',
       prix_par_jour: '',
-      statut: 'DISPONIBLE',
-      immatriculation: '',
-      couleur: '',
-      type_carburant: '',
-      ville: '',
-      description: ''
+      statut: 'DISPONIBLE'
     });
     setEditingId(null);
     setCarImages([]);
@@ -2153,16 +1821,10 @@ function AdminCars() {
       setEditingId(carId);
       setForm({
         brand_id: car.brand_id?.toString() || '',
-        category_id: car.category_id?.toString() || '',
         modele: car.modele || '',
         transmission: car.transmission || '',
         prix_par_jour: car.prix_par_jour?.toString() || '',
-        statut: car.statut || 'DISPONIBLE',
-        immatriculation: '',
-        couleur: '',
-        type_carburant: '',
-        ville: '',
-        description: ''
+        statut: car.statut || 'DISPONIBLE'
       });
       setCarImages(car.images || []);
       setImageUrl('');
@@ -2179,31 +1841,27 @@ function AdminCars() {
   const handleSubmit = async (event) => {
     event.preventDefault();
     setError(null);
+
+    if (!form.brand_id || !form.modele?.trim() || !form.transmission || !form.prix_par_jour) {
+      setError('La marque, le modele, la transmission et le prix sont obligatoires');
+      return;
+    }
+
+    if (!editingId && !imageUrl?.trim() && !imageFile) {
+      setError('La photo est obligatoire pour creer une annonce');
+      return;
+    }
+
     const basePayload = {
       brand_id: form.brand_id ? parseInt(form.brand_id) : undefined,
-      category_id: form.category_id ? parseInt(form.category_id) : undefined,
       modele: form.modele?.trim(),
       transmission: form.transmission?.trim(),
       prix_par_jour: form.prix_par_jour ? parseFloat(form.prix_par_jour) : undefined,
       statut: form.statut
     };
 
-    let payload;
-    if (editingId) {
-      payload = basePayload;
-    } else {
-      payload = {
-        ...basePayload,
-        immatriculation: form.immatriculation?.trim(),
-        couleur: form.couleur?.trim() || undefined,
-        type_carburant: form.type_carburant || undefined,
-        ville: form.ville?.trim(),
-        description: form.description?.trim() || undefined
-      };
-    }
-
     const cleanedPayload = Object.fromEntries(
-      Object.entries(payload).filter(([, value]) => value !== undefined && value !== '')
+      Object.entries(basePayload).filter(([, value]) => value !== undefined && value !== '')
     );
 
     const result = editingId
@@ -2231,11 +1889,16 @@ function AdminCars() {
       }
       
       if (finalImageUrl) {
-        await adminService.createCarImage({ 
+        const imageResult = await adminService.createCarImage({ 
           car_id: carId, 
           image_url: finalImageUrl, 
           is_primary: imagePrimary 
         });
+
+        if (!imageResult.success) {
+          setError(imageResult.error?.message || 'La voiture a ete creee, mais l’image n’a pas pu etre associee');
+          return;
+        }
         
         // If we are editing, refresh the images list immediately
         if (editingId) {
@@ -2260,7 +1923,12 @@ function AdminCars() {
   };
 
   const getBrandName = (brandId) => brands.find((b) => b.id === brandId)?.name || '—';
-  const getCategoryName = (categoryId) => categories.find((c) => c.id === categoryId)?.name || '—';
+  const getCarImage = (car) => {
+    const primary = Array.isArray(car.images)
+      ? (car.images.find((img) => img.is_primary)?.image_url || car.images[0]?.image_url)
+      : null;
+    return getImageUrl(primary);
+  };
 
   return (
     <div className="space-y-10">
@@ -2279,18 +1947,6 @@ function AdminCars() {
                 ...brands.map((brand) => ({
                   value: String(brand.id),
                   label: brand.name
-                }))
-              ]}
-            />
-            <AdminSelect
-              label="Catégorie"
-              value={form.category_id}
-              onChange={(val) => setForm({ ...form, category_id: val })}
-              options={[
-                { value: '', label: 'Sélectionner' },
-                ...categories.map((category) => ({
-                  value: String(category.id),
-                  label: category.name
                 }))
               ]}
             />
@@ -2323,61 +1979,13 @@ function AdminCars() {
               ]}
             />
           </div>
-          {!editingId && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <label className="text-[9px] font-black uppercase tracking-widest text-white/40">Immatriculation</label>
-                <input
-                  value={form.immatriculation}
-                  onChange={(e) => setForm({ ...form, immatriculation: e.target.value })}
-                  className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-xs font-bold outline-none focus:border-[#ff003c]"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-[9px] font-black uppercase tracking-widest text-white/40">Couleur</label>
-                <input
-                  value={form.couleur}
-                  onChange={(e) => setForm({ ...form, couleur: e.target.value })}
-                  className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-xs font-bold outline-none focus:border-[#ff003c]"
-                />
-              </div>
-              <AdminSelect
-                label="Carburant"
-                value={form.type_carburant}
-                onChange={(val) => setForm({ ...form, type_carburant: val })}
-                options={[
-                  { value: '', label: 'Sélectionner' },
-                  { value: 'ESSENCE', label: 'Essence' },
-                  { value: 'DIESEL', label: 'Diesel' },
-                  { value: 'ELECTRIQUE', label: 'Électrique' },
-                  { value: 'HYBRIDE', label: 'Hybride' }
-                ]}
-              />
-              <div className="space-y-2">
-                <label className="text-[9px] font-black uppercase tracking-widest text-white/40">Ville</label>
-                <input
-                  value={form.ville}
-                  onChange={(e) => setForm({ ...form, ville: e.target.value })}
-                  className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-xs font-bold outline-none focus:border-[#ff003c]"
-                />
-              </div>
-              <div className="space-y-2 md:col-span-2">
-                <label className="text-[9px] font-black uppercase tracking-widest text-white/40">Description (interne agence)</label>
-                <textarea
-                  value={form.description}
-                  onChange={(e) => setForm({ ...form, description: e.target.value })}
-                  className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-xs font-bold outline-none focus:border-[#ff003c] min-h-[80px]"
-                />
-              </div>
-            </div>
-          )}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="md:col-span-2 space-y-2">
-              <label className="text-[9px] font-black uppercase tracking-widest text-white/40">URL Image</label>
+              <label className="text-[9px] font-black uppercase tracking-widest text-white/40">Photo (URL)</label>
               <input value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-xs font-bold outline-none focus:border-[#ff003c]" />
             </div>
             <div className="space-y-2">
-              <label className="text-[9px] font-black uppercase tracking-widest text-white/40">Fichier image (upload)</label>
+              <label className="text-[9px] font-black uppercase tracking-widest text-white/40">Photo (upload)</label>
               <input type="file" accept="image/*" onChange={(e) => setImageFile(e.target.files?.[0] || null)} className="w-full bg-white/5 border border-white/10 p-3 rounded-2xl text-[10px] font-bold outline-none focus:border-[#ff003c]" />
             </div>
             <AdminSelect
@@ -2430,9 +2038,16 @@ function AdminCars() {
               const status = getCarStatusDisplay(car.statut);
               return (
                 <div key={car.id} className="bg-white/5 border border-white/10 rounded-3xl p-6">
+                  <div className="h-44 rounded-2xl overflow-hidden mb-5 bg-white/5 border border-white/10">
+                    <img
+                      src={getCarImage(car)}
+                      alt={car.modele}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
                   <div className="flex items-center justify-between mb-4">
                     <div>
-                      <p className="text-[9px] font-black uppercase tracking-widest text-white/40">{getBrandName(car.brand_id)} • {getCategoryName(car.category_id)}</p>
+                      <p className="text-[9px] font-black uppercase tracking-widest text-white/40">{car.brand?.name || getBrandName(car.brand_id)}</p>
                       <p className="text-xl font-black italic text-white">{car.modele}</p>
                     </div>
                     <span className={`px-3 py-1 rounded-xl border text-[9px] font-black uppercase tracking-widest ${status.style}`}>{status.label}</span>
@@ -2603,8 +2218,6 @@ function AppContent() {
   const [authOpen, setAuthOpen] = useState(false);
   const [categories, setCategories] = useState([]);
   const [searchParams, setSearchParams] = useState(null);
-  const [bookingCar, setBookingCar] = useState(null);
-  const [selectedBookingId, setSelectedBookingId] = useState(null);
 
   useEffect(() => {
     fetchCategories();
@@ -2636,16 +2249,6 @@ function AppContent() {
     setCurrentView('search-results');
   };
 
-  const handleBookCar = (bookingId) => {
-    setSelectedBookingId(bookingId);
-    setCurrentView('booking-detail');
-  };
-
-  const handleViewBookingDetail = (bookingId) => {
-    setSelectedBookingId(bookingId);
-    setCurrentView('booking-detail');
-  };
-
   return (
     <div className="min-h-screen bg-black text-white">
       <Navbar 
@@ -2659,21 +2262,10 @@ function AppContent() {
       
       {currentView === 'home' && <HomeView setView={setCurrentView} setSelectedCat={setSelectedCat} categories={categories} onSearch={handleSearch} />}
       {currentView === 'cars' && <CarsPage selectedCat={selectedCat} setSelectedCat={setSelectedCat} setView={setCurrentView} categories={categories} />}
-      {currentView === 'search-results' && searchParams && <SearchResultsPage searchParams={searchParams} onBookCar={handleBookCar} />}
-      {currentView === 'bookings' && user && <BookingsPage setView={setCurrentView} onViewDetail={handleViewBookingDetail} />}
+      {currentView === 'search-results' && <SearchResultsPage />}
       {currentView === 'profile' && user && <UserProfile />}
       {currentView === 'about' && <AboutPage setView={setCurrentView} />}
       {currentView === 'admin' && user?.role === 'ADMIN' && <AdminDashboard />}
-      {currentView === 'booking-detail' && selectedBookingId && (
-        <BookingDetailPage 
-          bookingId={selectedBookingId} 
-          onBack={() => setCurrentView('bookings')}
-          onCancel={() => {
-            setCurrentView('bookings');
-            setSelectedBookingId(null);
-          }}
-        />
-      )}
       
       {['home','cars'].includes(currentView) && (
         <LeastDemandedCars onSelect={() => setCurrentView('cars')} />

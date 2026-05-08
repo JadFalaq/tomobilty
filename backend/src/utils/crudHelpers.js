@@ -13,7 +13,8 @@ const listEntities = async (entityName, options = {}) => {
     filters = {},
     sortBy = 'id',
     sortOrder = 'desc',
-    include = {}
+    include,
+    select
   } = options;
 
   const skip = (parseInt(page) - 1) * parseInt(pageSize);
@@ -33,10 +34,11 @@ const listEntities = async (entityName, options = {}) => {
   }
 
   // Execute query with pagination
+  const queryShape = select ? { select } : include ? { include } : {};
   const [items, total] = await Promise.all([
     prisma[entityName].findMany({
       where,
-      include,
+      ...queryShape,
       orderBy: { [sortBy]: sortOrder },
       skip,
       take

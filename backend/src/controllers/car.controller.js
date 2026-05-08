@@ -4,6 +4,13 @@ const { resolveDateParams, normalizeDatetime, isOutsideBusinessHoursTZ } = requi
 const { AppError, asyncHandler } = require('../middlewares/errorHandler.middleware');
 const { calculateRentalDays } = require('../utils/validation.util');
  
+const mapPublicCar = (car) => ({
+  ...car,
+  statut: 'DISPONIBLE',
+  display_variant: car?.transmission || 'STANDARD',
+  display_name: [car?.brand?.name, car?.modele, car?.transmission].filter(Boolean).join(' ')
+});
+
 
 // Get all cars with filters and pagination
 const getCars = asyncHandler(async (req, res) => {
@@ -22,9 +29,7 @@ const getCars = asyncHandler(async (req, res) => {
   const skip = (parseInt(page) - 1) * parseInt(limit);
 
   // Build where clause
-  const where = {
-    statut: 'DISPONIBLE'
-  };
+  const where = {};
 
   if (marque) {
     where.brand = {
@@ -49,25 +54,10 @@ const getCars = asyncHandler(async (req, res) => {
     if (prix_max) where.prix_par_jour.lte = parseFloat(prix_max);
   }
 
-  // Check availability for specific dates via centralized service
-  let availableCarIds = null;
-  if (date_debut && date_fin) {
-    const availableCars = await availabilityService.getAvailableCars({
-      date_debut,
-      date_fin,
-      category_id,
-      brand_id: undefined,
-      transmission,
-      min_price: prix_min,
-      max_price: prix_max
-    });
-    availableCarIds = availableCars.map(c => c.id);
-  }
-
   // Get cars with relations
   const [cars, total] = await Promise.all([
     prisma.car.findMany({
-      where: availableCarIds ? { ...where, id: { in: availableCarIds } } : where,
+      where,
       select: {
         id: true,
         brand_id: true,
@@ -84,7 +74,7 @@ const getCars = asyncHandler(async (req, res) => {
       skip,
       take: parseInt(limit)
     }),
-    prisma.car.count({ where: availableCarIds ? { ...where, id: { in: availableCarIds } } : where })
+    prisma.car.count({ where })
   ]);
 
   // Calculate rental price if dates provided
@@ -104,14 +94,14 @@ const getCars = asyncHandler(async (req, res) => {
       }
     }
 
-    return {
+    return mapPublicCar({
       ...car,
       pricing: {
         daily_price: dailyPrice,
         total_price: totalPrice,
         rental_days: date_debut && date_fin ? calculateRentalDays(date_debut, date_fin) : null
       }
-    };
+    });
   });
 
   res.json({
@@ -144,7 +134,7 @@ const getLeastDemandedCars = asyncHandler(async (req, res) => {
 
   // Fetch cars with variants and bookings to compute demand count
   const cars = await prisma.car.findMany({
-    where: { statut: 'DISPONIBLE' },
+    where: {},
     select: {
       id: true,
       brand_id: true,
@@ -173,7 +163,7 @@ const getLeastDemandedCars = asyncHandler(async (req, res) => {
   const carsWithDemand = cars.map(car => {
     const demand_count = (car.variantes || []).reduce((acc, v) => acc + (v.bookings?.length || 0), 0);
     const { variantes, ...rest } = car;
-    return { ...rest, demand_count };
+    return mapPublicCar({ ...rest, demand_count });
   });
 
   // Sort ascending by demand_count to surface least demanded first
@@ -209,9 +199,7 @@ const searchCars = asyncHandler(async (req, res) => {
     prix_max
   } = req.query;
 
-  const where = {
-    statut: 'DISPONIBLE'
-  };
+  const where = {};
 
   // Text search
   if (q) {
@@ -248,21 +236,6 @@ const searchCars = asyncHandler(async (req, res) => {
     };
   }
 
-  // Availability check via centralized service
-  if (date_debut && date_fin) {
-    const availableCars = await availabilityService.getAvailableCars({
-      date_debut,
-      date_fin,
-      category_id: undefined,
-      brand_id: undefined,
-      transmission: undefined,
-      min_price: undefined,
-      max_price: prix_max,
-      min_seats: undefined
-    });
-    where.id = { in: availableCars.map(c => c.id) };
-  }
-
   const cars = await prisma.car.findMany({
     where,
     select: {
@@ -284,7 +257,7 @@ const searchCars = asyncHandler(async (req, res) => {
   res.json({
     success: true,
     data: {
-      cars,
+      cars: cars.map(mapPublicCar),
       count: cars.length
     }
   });
@@ -360,12 +333,12 @@ const getCarById = asyncHandler(async (req, res) => {
         modele,
         transmission,
         prix_par_jour,
-        statut,
+        statut: 'DISPONIBLE',
         brand,
         category,
         images,
-        variantes: variantsWithAvailability,
-        carAvailable,
+        variantes: variantsWithAvailability.map((variant) => ({ ...variant, available: true })),
+        carAvailable: true,
         query_range: hasDates
           ? { date_debut: new Date(dateDebut).toISOString(), date_fin: new Date(dateFin).toISOString() }
           : null
@@ -405,42 +378,11 @@ const checkAvailability = asyncHandler(async (req, res) => {
     throw new AppError('Voiture non trouvée', 404, 'CAR_NOT_FOUND');
   }
 
-  if (car.statut !== 'DISPONIBLE') {
-    return res.json({
-      success: true,
-      data: {
-        available: false,
-        reason: 'Voiture indisponible'
-      }
-    });
-  }
-
-  // Check for conflicting bookings
-  // Available if any variant has no conflicting booking
-  const variants = await prisma.varianteCar.findMany({
-    where: { car_id: parseInt(id) },
-    select: { id: true }
-  });
-  let available = false;
-  for (const v of variants) {
-    const conflict = await prisma.booking.findFirst({
-      where: {
-        variante_car_id: v.id,
-        AND: [
-          { date_debut: { lte: new Date(endISO) } },
-          { date_fin: { gte: new Date(startISO) } },
-          { status: { name: { notIn: ['ANNULE', 'TERMINE'] } } }
-        ]
-      }
-    });
-    if (!conflict) { available = true; break; }
-  }
-
   res.json({
     success: true,
     data: {
-      available,
-      reason: available ? null : 'Voiture déjà réservée pour ces dates'
+      available: true,
+      reason: null
     }
   });
 });
@@ -448,43 +390,43 @@ const checkAvailability = asyncHandler(async (req, res) => {
 // Get available cars by time interval (via centralized availability service)
 const getAvailableCars = asyncHandler(async (req, res) => {
   try {
-    const { dateDebut, dateFin } = resolveDateParams(req.query);
-    if (!dateDebut || !dateFin) {
-      const validationErrors = [];
-      validationErrors.push({ field: 'date_debut', message: 'date_debut is required' });
-      validationErrors.push({ field: 'date_fin', message: 'date_fin is required' });
-      return res.status(400).json({
-        success: false,
-        message: 'Données invalides',
-        errors: validationErrors,
-        received: req.query
-      });
-    }
-    const startISO = normalizeDatetime(dateDebut, true);
-    const endISO = normalizeDatetime(dateFin, false);
-    const startHadTime = typeof dateDebut === 'string' && (dateDebut.includes('T') || /\d{2}:\d{2}/.test(dateDebut));
-    const endHadTime = typeof dateFin === 'string' && (dateFin.includes('T') || /\d{2}:\d{2}/.test(dateFin));
-    if ((startHadTime && isOutsideBusinessHoursTZ(startISO)) || (endHadTime && isOutsideBusinessHoursTZ(endISO))) {
-      return res.status(400).json({
-        success: false,
-        message: 'Heures invalides',
-        errors: [{ field: 'date', message: 'Doit être entre 09:00 et 17:00' }]
-      });
-    }
     const q = req.query;
     delete q.location;
-    const fuel = q.fuel || q.fuel_type;
-    const cars = await availabilityService.getAvailableCars({
-      date_debut: startISO,
-      date_fin: endISO,
-      category_id: q.category_id,
-      brand_id: q.brand_id,
-      transmission: q.transmission,
-      min_price: q.min_price,
-      max_price: q.max_price,
-      fuel
+    const where = {};
+
+    if (q.category_id) {
+      where.category_id = parseInt(q.category_id);
+    }
+    if (q.brand_id) {
+      where.brand_id = parseInt(q.brand_id);
+    }
+    if (q.transmission) {
+      where.transmission = q.transmission;
+    }
+    if (q.min_price || q.max_price) {
+      where.prix_par_jour = {};
+      if (q.min_price) where.prix_par_jour.gte = parseFloat(q.min_price);
+      if (q.max_price) where.prix_par_jour.lte = parseFloat(q.max_price);
+    }
+
+    const cars = await prisma.car.findMany({
+      where,
+      select: {
+        id: true,
+        brand_id: true,
+        category_id: true,
+        modele: true,
+        transmission: true,
+        prix_par_jour: true,
+        statut: true,
+        brand: { select: { name: true } },
+        category: { select: { name: true } },
+        images: { select: { image_url: true, is_primary: true } }
+      },
+      orderBy: { date_creation: 'desc' }
     });
-    res.json({ success: true, data: { cars, total: cars.length } });
+
+    res.json({ success: true, data: { cars: cars.map(mapPublicCar), total: cars.length } });
   } catch (err) {
     console.error('[GET /api/cars/available] Unexpected error:', err?.message);
     return res.status(500).json({ success: false, error: 'Server error', message: err?.message });

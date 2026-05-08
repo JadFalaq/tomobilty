@@ -100,6 +100,12 @@ const createCarImage = asyncHandler(async (req, res) => {
   validateRequiredFields(req.body, ['car_id', 'image_url']);
   const data = whitelistFields(req.body, ['car_id', 'image_url', 'alt_text', 'is_primary']);
   if (data.car_id) data.car_id = parseInt(data.car_id);
+  if (data.is_primary) {
+    await prisma.carImage.updateMany({
+      where: { car_id: data.car_id },
+      data: { is_primary: false }
+    });
+  }
   const image = await createEntity('carImage', data);
   res.status(201).json({ success: true, data: image });
 });

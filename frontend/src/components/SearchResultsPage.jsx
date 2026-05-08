@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { FaCheck as Check, FaTimes as X } from 'react-icons/fa';
 import { carService } from '../services/car.service';
 import { formatPrice } from '../utils/dateUtils';
 import { getImageUrl } from '../utils/apiClient';
-import ReservationFlow from './ReservationFlow';
 
 const GLASS = "bg-black/60 backdrop-blur-xl border border-white/10";
 
@@ -20,35 +19,21 @@ function SectionTitle({ subtitle, title }) {
   );
 }
 
-function SearchResultsPage({ searchParams, onBookCar }) {
+function SearchResultsPage() {
   const [cars, setCars] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [selectedCar, setSelectedCar] = useState(null);
-  const [showReservation, setShowReservation] = useState(false);
 
   useEffect(() => {
     fetchAvailableCars();
-  }, [searchParams]);
+  }, []);
 
   const fetchAvailableCars = async () => {
     setLoading(true);
     setError(null);
 
     try {
-      const params = {
-        date_debut: searchParams.startDate,
-        date_fin: searchParams.endDate,
-      };
-
-      if (searchParams.pickupSiteId) {
-        params.pickup_site_id = searchParams.pickupSiteId;
-      }
-      if (searchParams.returnSiteId) {
-        params.return_site_id = searchParams.returnSiteId;
-      }
-
-      const result = await carService.getAvailableCars(params);
+      const result = await carService.getCars();
 
       if (result.success) {
         setCars(result.cars);
@@ -62,41 +47,22 @@ function SearchResultsPage({ searchParams, onBookCar }) {
     }
   };
 
-  const calculateDays = () => {
-    if (!searchParams.startDate || !searchParams.endDate) return 0;
-    const start = new Date(searchParams.startDate);
-    const end = new Date(searchParams.endDate);
-    const diffTime = Math.abs(end - start);
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return diffDays;
-  };
-
-  const rentalDays = calculateDays();
-
   return (
     <div className="pt-32 pb-40 px-6 max-w-7xl mx-auto min-h-screen">
       <SectionTitle 
-        subtitle="Résultats de Recherche" 
+        subtitle="Showroom" 
         title="VÉHICULES DISPONIBLES" 
       />
 
       <div className={`${GLASS} p-6 rounded-2xl mb-12 border-white/5`}>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-center">
           <div>
-            <p className="text-[10px] font-black text-white/40 uppercase tracking-widest mb-2">Période</p>
-            <p className="text-white font-bold">{rentalDays} jour{rentalDays > 1 ? 's' : ''}</p>
+            <p className="text-[10px] font-black text-white/40 uppercase tracking-widest mb-2">Mode</p>
+            <p className="text-white font-bold">Site vitrine</p>
           </div>
           <div>
-            <p className="text-[10px] font-black text-white/40 uppercase tracking-widest mb-2">Début</p>
-            <p className="text-white font-bold">
-              {searchParams.startDate ? new Date(searchParams.startDate).toLocaleDateString('fr-FR') : '-'}
-            </p>
-          </div>
-          <div>
-            <p className="text-[10px] font-black text-white/40 uppercase tracking-widest mb-2">Fin</p>
-            <p className="text-white font-bold">
-              {searchParams.endDate ? new Date(searchParams.endDate).toLocaleDateString('fr-FR') : '-'}
-            </p>
+            <p className="text-[10px] font-black text-white/40 uppercase tracking-widest mb-2">Disponibilité</p>
+            <p className="text-white font-bold">Voitures visibles uniquement</p>
           </div>
           <div>
             <p className="text-[10px] font-black text-white/40 uppercase tracking-widest mb-2">Véhicules</p>
@@ -118,15 +84,15 @@ function SearchResultsPage({ searchParams, onBookCar }) {
             <X size={48} className="text-red-500" />
           </div>
           <h3 className="text-2xl font-black text-white mb-4 uppercase italic">{error}</h3>
-          <p className="text-white/60">Veuillez réessayer avec d'autres critères</p>
+          <p className="text-white/60">Veuillez reessayer plus tard</p>
         </div>
       ) : cars.length === 0 ? (
         <div className="text-center py-20">
           <div className="inline-block p-6 bg-white/5 border border-white/10 rounded-3xl mb-4">
             <X size={48} className="text-white/40" />
           </div>
-          <h3 className="text-2xl font-black text-white mb-4 uppercase italic">Aucun véhicule disponible</h3>
-          <p className="text-white/60">Essayez de modifier vos dates ou votre lieu de retrait</p>
+          <h3 className="text-2xl font-black text-white mb-4 uppercase italic">Aucun vehicule a afficher</h3>
+          <p className="text-white/60">La flotte sera bientot enrichie</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
@@ -141,7 +107,6 @@ function SearchResultsPage({ searchParams, onBookCar }) {
             const finalImageUrl = getImageUrl(imageUrl);
             
             const dailyPrice = car.pricing?.daily_price || car.prix_par_jour;
-            const totalPrice = car.pricing?.total_price || (dailyPrice * rentalDays);
 
             return (
               <motion.div
@@ -171,60 +136,42 @@ function SearchResultsPage({ searchParams, onBookCar }) {
                   <h4 className="text-[10px] font-black text-[#ff003c] uppercase tracking-widest mb-1">
                     {car.brand?.name || 'Marque'}
                   </h4>
-                  <h3 className="text-3xl font-black italic uppercase text-white mb-4 leading-none">
+                  <h3 className="text-3xl font-black italic uppercase text-white mb-2 leading-none">
                     {car.modele}
                   </h3>
+                  <p className="text-[10px] font-black uppercase tracking-[0.25em] text-white/50 mb-4">
+                    {car.display_variant || car.transmission || 'STANDARD'}
+                  </p>
                   
                   <div className="grid grid-cols-1 gap-4 mb-6 pb-6 border-b border-white/10">
                     <div className="text-center">
-                      <p className="text-[8px] font-black text-white/40 uppercase tracking-widest mb-1">Trans.</p>
-                      <p className="text-white font-bold text-xs">{car.transmission?.substring(0, 4) || '-'}</p>
+                      <p className="text-[8px] font-black text-white/40 uppercase tracking-widest mb-1">Transmission</p>
+                      <p className="text-white font-bold text-xs">{car.display_variant || car.transmission || '-'}</p>
                     </div>
                   </div>
 
                   <div className="mb-6">
-                    <p className="text-[8px] font-black text-white/40 uppercase tracking-widest mb-2">Prix Total</p>
+                    <p className="text-[8px] font-black text-white/40 uppercase tracking-widest mb-2">Prix indicatif</p>
                     <p className="text-4xl font-black italic text-[#ff003c]">
-                      {formatPrice(totalPrice)} <span className="text-lg text-white/60">MAD</span>
+                      {formatPrice(dailyPrice)} <span className="text-lg text-white/60">MAD/J</span>
                     </p>
                     <p className="text-[10px] text-white/40 font-bold mt-1">
-                      pour {rentalDays} jour{rentalDays > 1 ? 's' : ''}
+                      Contactez-nous pour plus de details
                     </p>
                   </div>
 
-                  <button 
-                    onClick={() => {
-                      setSelectedCar(car);
-                      setShowReservation(true);
-                    }}
+                  <a
+                    href="tel:+212662719526"
                     className="w-full py-5 bg-white text-black font-black uppercase italic rounded-2xl hover:bg-[#ff003c] hover:text-white transition-all shadow-xl"
                   >
-                    RÉSERVER MAINTENANT
-                  </button>
+                    NOUS CONTACTER
+                  </a>
                 </div>
               </motion.div>
             );
           })}
         </div>
       )}
-
-      <AnimatePresence>
-        {showReservation && selectedCar && (
-          <ReservationFlow
-            car={selectedCar}
-            searchParams={searchParams}
-            onClose={() => {
-              setShowReservation(false);
-              setSelectedCar(null);
-            }}
-            onComplete={(booking) => {
-              setShowReservation(false);
-              setSelectedCar(null);
-              if (onBookCar) onBookCar(booking);
-            }}
-          />
-        )}
-      </AnimatePresence>
     </div>
   );
 }
