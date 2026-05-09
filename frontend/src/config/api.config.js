@@ -1,6 +1,6 @@
 export const API_CONFIG = {
-  BASE_URL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api',
-  PAYMENT_RETURN_URL: import.meta.env.VITE_PAYMENT_RETURN_URL || 'http://localhost:5173/payment/return',
+  BASE_URL: import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:3000/api'),
+  PAYMENT_RETURN_URL: import.meta.env.VITE_PAYMENT_RETURN_URL || (typeof window !== 'undefined' ? `${window.location.origin}/payment/return` : 'http://localhost:5173/payment/return'),
   TIMEOUT: 30000,
   RETRY_ATTEMPTS: 3,
 };

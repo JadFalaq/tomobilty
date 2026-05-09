@@ -10,6 +10,7 @@
     "build": "npm run build -w frontend",
     "start": "npm run preview -w frontend",
     "lint": "npm --prefix ./frontend run build",
+    "postinstall": "prisma generate --schema ./backend/prisma/schema.prisma",
     "api:dev": "npm run prisma:generate && node backend/api/index.js",
     "api:start": "npm run prisma:generate && node backend/api/index.js",
     "test": "jest",
@@ -93,6 +94,6 @@
     ]
   },
   "engines": {
-    "node": "24.x"
+    "node": "22.x"
   }
 }
